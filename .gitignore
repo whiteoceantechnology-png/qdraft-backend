@@ -1,0 +1,13 @@
+.vscode/
+node_modules/
+dist/
+.env
+coverage
+doc/
+
+# PM2 logs
+logs/
+!logs/.gitkeep
+
+# PM2 dump files
+.pm2/

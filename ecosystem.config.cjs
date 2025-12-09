@@ -1,0 +1,83 @@
+/**
+ * PM2 Ecosystem Configuration
+ * Usage:
+ *   pm2 start ecosystem.config.cjs
+ *   pm2 start ecosystem.config.cjs --env production
+ *   pm2 start ecosystem.config.cjs --env development
+ */
+
+module.exports = {
+  apps: [
+    {
+      name: 'qb-server',
+      script: './src/index.js',
+      
+      // Instances and execution mode
+      instances: process.env.NODE_ENV === 'production' ? 'max' : 1,
+      exec_mode: process.env.NODE_ENV === 'production' ? 'cluster' : 'fork',
+      
+      // Auto-restart settings
+      autorestart: true,
+      watch: false,
+      max_restarts: 10,
+      restart_delay: 4000,
+      
+      // Memory management
+      max_memory_restart: '500M',
+      
+      // Logging
+      merge_logs: true,
+      log_date_format: 'YYYY-MM-DD HH:mm:ss Z',
+      error_file: './logs/pm2-error.log',
+      out_file: './logs/pm2-out.log',
+      
+      // Graceful shutdown
+      kill_timeout: 5000,
+      wait_ready: true,
+      listen_timeout: 10000,
+      
+      // Environment variables for development
+      env: {
+        NODE_ENV: 'development',
+        PORT: 3000,
+      },
+      
+      // Environment variables for production
+      env_production: {
+        NODE_ENV: 'production',
+        PORT: 3000,
+      },
+      
+      // Environment variables for staging
+      env_staging: {
+        NODE_ENV: 'staging',
+        PORT: 3000,
+      },
+      
+      // Node.js arguments
+      node_args: [
+        '--experimental-specifier-resolution=node',
+      ],
+      
+      // Exponential backoff restart delay
+      exp_backoff_restart_delay: 100,
+      
+      // Cron restart (optional - restart daily at midnight)
+      // cron_restart: '0 0 * * *',
+    },
+  ],
+
+  // Deployment configuration (optional)
+  deploy: {
+    production: {
+      user: 'deploy',
+      host: 'your-server.com',
+      ref: 'origin/main',
+      repo: 'git@github.com:your-username/qb-server.git',
+      path: '/var/www/qb-server',
+      'pre-deploy-local': '',
+      'post-deploy': 'npm install && pm2 reload ecosystem.config.cjs --env production',
+      'pre-setup': '',
+    },
+  },
+};
