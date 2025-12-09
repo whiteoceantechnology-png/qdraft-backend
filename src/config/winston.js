@@ -13,66 +13,42 @@ const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 const logsDir = path.join(__dirname, '../../logs');
 
-const { createLogger, format, transports } = winston;
-const { combine, timestamp, printf, errors, json, colorize } = format;
-
-// Custom log format for console
-const consoleFormat = printf(({ level, message, timestamp, stack }) => {
-  return `${timestamp} [${level}]: ${stack || message}`;
-});
-
-// Custom log format for files (JSON for easy parsing)
-const fileFormat = combine(
-  timestamp({ format: 'YYYY-MM-DD HH:mm:ss' }),
-  errors({ stack: true }),
-  json()
-);
-
 const isDev = process.env.NODE_ENV === 'development';
 
-// Create logger instance
-const logger = createLogger({
+// Create logger instance (Winston v2 API)
+const logger = new winston.Logger({
   level: isDev ? 'debug' : 'info',
-  format: combine(
-    timestamp({ format: 'YYYY-MM-DD HH:mm:ss' }),
-    errors({ stack: true })
-  ),
-  defaultMeta: { service: 'qb-server' },
   transports: [
     // Error logs - separate file for easy monitoring
-    new transports.File({
+    new winston.transports.File({
+      name: 'error-file',
       filename: path.join(logsDir, 'error.log'),
       level: 'error',
-      format: fileFormat,
+      json: true,
       maxsize: 5 * 1024 * 1024, // 5MB
       maxFiles: 5,
-      tailable: true,
-      // Async options for non-blocking writes
-      options: { flags: 'a' }
+      tailable: true
     }),
     // Combined logs - all levels
-    new transports.File({
+    new winston.transports.File({
+      name: 'combined-file',
       filename: path.join(logsDir, 'combined.log'),
-      format: fileFormat,
+      json: true,
       maxsize: 10 * 1024 * 1024, // 10MB
       maxFiles: 5,
-      tailable: true,
-      options: { flags: 'a' }
+      tailable: true
     })
   ],
-  // Don't exit on handled exceptions
   exitOnError: false
 });
 
 // Add console transport in development
 if (isDev) {
-  logger.add(new transports.Console({
-    format: combine(
-      colorize({ all: true }),
-      timestamp({ format: 'HH:mm:ss' }),
-      consoleFormat
-    )
-  }));
+  logger.add(winston.transports.Console, {
+    colorize: true,
+    timestamp: true,
+    prettyPrint: true
+  });
 }
 
 // Create a stream object for Morgan HTTP logging (if needed later)
@@ -84,7 +60,7 @@ logger.stream = {
 
 // Helper methods for structured logging
 logger.logRequest = (req, responseTime) => {
-  logger.info({
+  logger.info('request', {
     type: 'request',
     method: req.method,
     url: req.originalUrl,
@@ -108,7 +84,7 @@ logger.logError = (err, req = null) => {
     errorLog.ip = req.ip;
   }
   
-  logger.error(errorLog);
+  logger.error('error', errorLog);
 };
 
 export default logger;
