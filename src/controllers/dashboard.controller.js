@@ -1,181 +1,197 @@
-import HTTPStatus from 'http-status';
+/**
+ * Dashboard Controller - Sequelize for MariaDB
+ * Multi-tenant support
+ */
 
+import HTTPStatus from 'http-status';
+import { fn, col, literal } from 'sequelize';
 import Question from '../models/question.model.js';
-import Blueprint from '../models/blueprint.model.js';
 import Exam from '../models/exam.model.js';
-import Pattern from '../models/pattern.model.js';
+import Chapter from '../models/chapter.model.js';
+import QuestionType from '../models/questiontype.model.js';
+import User from '../models/user.model.js';
+import { tenantFilter } from '../middlewares/tenant.middleware.js';
 
 /**
+ * GET /api/dashboard/stats
  * Get dashboard statistics
- * @param {Object} req - Express request object
- * @param {Object} res - Express response object
  */
-export async function getDashboardStats(req, res, next) {
-    try {
-        const userId = req.user?.user_id;
+export async function getStats(req, res, next) {
+  try {
+    const [questionCount, examCount, chapterCount, questionTypeCount] = await Promise.all([
+      Question.count({ where: tenantFilter(req) }),
+      Exam.count({ where: { ...tenantFilter(req), created_by: req.user.user_id } }),
+      Chapter.count({ where: tenantFilter(req) }),
+      QuestionType.count({ where: tenantFilter(req) }),
+    ]);
 
-        if (!userId) {
-            return res.status(HTTPStatus.UNAUTHORIZED).json({ message: 'Unauthorized' });
-        }
-
-        // Count QBM exams created by user
-        const qbmCount = await Exam.countDocuments({
-            created_by: userId
-        }).exec();
-
-        // Count patterns created by user
-        const chapterCount = await Pattern.countDocuments({
-            qbs_ptn_added_by: userId
-        }).exec();
-
-        // Count questions created by user
-        const questionCount = await Question.countDocuments({
-            qbs_question_added_by: userId
-        }).exec();
-
-        const userBased = {
-            qbm: qbmCount,
-            chapter: chapterCount,
-            questions: questionCount
-        };
-
-        // Get question counts by type (still filtered by user)
-        const questionCountsParsed = await Question.aggregate([
-            { $match: { qbs_question_added_by: userId } },
-            {
-                $lookup: {
-                    from: 'questiontypes',
-                    localField: 'qbs_qst_type_id',
-                    foreignField: 'qbs_qs_type_id',
-                    as: 'questionType'
-                }
-            },
-            { $unwind: '$questionType' },
-            {
-                $group: {
-                    _id: {
-                        typeId: '$qbs_qs_type_id',
-                        typeName: '$questionType.qbs_qs_type_name'
-                    },
-                    question_count: { $sum: 1 }
-                }
-            },
-            {
-                $project: {
-                    _id: 0,
-                    qbs_qs_type_name: '$_id.typeName',
-                    question_count: { $toString: '$question_count' }
-                }
-            },
-            { $sort: { qbs_qs_type_name: 1 } }
-        ]);
-
-        res.status(HTTPStatus.OK).json({
-            userBased,
-            questionCountsParsed
-        });
-    } catch (error) {
-        console.error('Dashboard stats error:', error);
-        next(error);
-    }
-};
-
-// Build last N months labels and boundaries (oldest -> newest)
-function buildLastNMonths(n = 12, endDate = new Date()) {
-    const months = [];
-    // clone and set to first day of the month for endDate
-    const end = new Date(endDate.getFullYear(), endDate.getMonth(), 1);
-    for (let i = n - 1; i >= 0; i--) {
-        const d = new Date(end.getFullYear(), end.getMonth() - i, 1);
-        const label = d.toLocaleString('en-US', { month: 'long', year: 'numeric' });
-        const start = new Date(d.getFullYear(), d.getMonth(), 1, 0, 0, 0, 0);
-        const next = new Date(d.getFullYear(), d.getMonth() + 1, 1, 0, 0, 0, 0);
-        months.push({ label, year: d.getFullYear(), month: d.getMonth() + 1, start, end: new Date(next - 1) });
-    }
-    return months;
+    return res.status(HTTPStatus.OK).json({
+      questions: questionCount,
+      exams: examCount,
+      chapters: chapterCount,
+      questionTypes: questionTypeCount,
+    });
+  } catch (err) {
+    err.status = HTTPStatus.BAD_REQUEST;
+    return next(err);
+  }
 }
 
 /**
- * Get monthly dashboard statistics (blueprints, exams, pieData per dept/sub)
+ * GET /api/dashboard/questions-by-chapter
+ * Get question count grouped by chapter
  */
-export async function getDashboardMonthlyStats(req, res, next) {
-    try {
-        const months = buildLastNMonths(12);
-        const rangeStart = months[0].start;
-        const rangeEnd = months[months.length - 1].end;
+export async function getQuestionsByChapter(req, res, next) {
+  try {
+    const { subjectId, deptId } = req.query;
 
-        // Blueprints aggregation by month
-        const blpAgg = await Blueprint.aggregate([
-            { $match: { qbs_blp_added_at: { $gte: rangeStart, $lte: rangeEnd } } },
-            {
-                $group: {
-                    _id: { year: { $year: '$qbs_blp_added_at' }, month: { $month: '$qbs_blp_added_at' } },
-                    count: { $sum: 1 }
-                }
-            }
-        ]).exec();
+    const where = { ...tenantFilter(req) };
+    if (subjectId) where.qbs_sub_id = subjectId;
+    if (deptId) where.qbs_dept_id = deptId;
 
-        const bluePrintStat = months.map(m => {
-            const found = blpAgg.find(a => a._id.year === m.year && a._id.month === m.month);
-            return { month: m.label, count: found ? found.count : 0 };
+    const chapters = await Chapter.findAll({ where });
+
+    const result = await Promise.all(
+      chapters.map(async (chapter) => {
+        const count = await Question.count({
+          where: {
+            ...tenantFilter(req),
+            qbs_chapter_id: chapter.qbs_chapter_id,
+          },
         });
 
-        // Exams aggregation by month
-        const exAgg = await Exam.aggregate([
-            { $match: { qbs_exam_added: { $gte: rangeStart, $lte: rangeEnd } } },
-            {
-                $group: {
-                    _id: { year: { $year: '$qbs_exam_added' }, month: { $month: '$qbs_exam_added' } },
-                    count: { $sum: 1 }
-                }
-            }
-        ]).exec();
+        return {
+          qbs_chapter_id: chapter.qbs_chapter_id,
+          qbs_chapter_name: chapter.qbs_chapter_name,
+          question_count: count,
+        };
+      })
+    );
 
-        const examStat = months.map(m => {
-            const found = exAgg.find(a => a._id.year === m.year && a._id.month === m.month);
-            return { month: m.label, count: found ? found.count : 0 };
+    return res.status(HTTPStatus.OK).json(result);
+  } catch (err) {
+    err.status = HTTPStatus.BAD_REQUEST;
+    return next(err);
+  }
+}
+
+/**
+ * GET /api/dashboard/questions-by-type
+ * Get question count grouped by type
+ */
+export async function getQuestionsByType(req, res, next) {
+  try {
+    const questionTypes = await QuestionType.findAll({
+      where: tenantFilter(req),
+    });
+
+    const result = await Promise.all(
+      questionTypes.map(async (qt) => {
+        const count = await Question.count({
+          where: {
+            ...tenantFilter(req),
+            qbs_qst_type_id: qt.qbs_qs_type_id,
+          },
         });
 
-        // Pie data: questions counts grouped by dept/sub per month
-        // Aggregate questions per dept/sub per month
-        const qAgg = await Question.aggregate([
-            { $match: { qbs_question_added: { $gte: rangeStart, $lte: rangeEnd } } },
-            {
-                $group: {
-                    _id: {
-                        dept: '$qbs_dept_id',
-                        sub: '$qbs_sub_id',
-                        year: { $year: '$qbs_question_added' },
-                        month: { $month: '$qbs_question_added' }
-                    },
-                    count: { $sum: 1 }
-                }
-            },
-            {
-                $group: {
-                    _id: { dept: '$_id.dept', sub: '$_id.sub' },
-                    monthly: {
-                        $push: {
-                            year: '$_id.year',
-                            month: '$_id.month',
-                            count: '$count'
-                        }
-                    }
-                }
-            }
-        ]).exec();
+        return {
+          qbs_qs_type_id: qt.qbs_qs_type_id,
+          qbs_qs_type_name: qt.qbs_qs_type_name,
+          question_count: count,
+        };
+      })
+    );
 
-        const pieData = qAgg.map(g => {
-            const monthly_counts = months.map(m => {
-                const found = g.monthly.find(mc => mc.year === m.year && mc.month === m.month);
-                return { month: m.label, count: found ? found.count : 0 };
-            });
-            return { qbs_dept_id: String(g._id.dept), qbs_sub_id: g._id.sub, monthly_counts };
-        });
+    return res.status(HTTPStatus.OK).json(result);
+  } catch (err) {
+    err.status = HTTPStatus.BAD_REQUEST;
+    return next(err);
+  }
+}
 
-        res.status(HTTPStatus.OK).json({ bluePrintStat, examStat, pieData });
-    } catch (err) {
-        next(err);
-    }
+/**
+ * GET /api/dashboard/recent-exams
+ * Get recent exams
+ */
+export async function getRecentExams(req, res, next) {
+  try {
+    const limit = parseInt(req.query.limit) || 10;
+
+    const exams = await Exam.findAll({
+      where: {
+        ...tenantFilter(req),
+        created_by: req.user.user_id,
+      },
+      attributes: ['qbs_exam_id', 'qbs_exam_name', 'qbs_exam_added', 'created_at'],
+      order: [['created_at', 'DESC']],
+      limit,
+    });
+
+    return res.status(HTTPStatus.OK).json(exams);
+  } catch (err) {
+    err.status = HTTPStatus.BAD_REQUEST;
+    return next(err);
+  }
+}
+
+/**
+ * GET /api/dashboard/recent-questions
+ * Get recently added questions
+ */
+export async function getRecentQuestions(req, res, next) {
+  try {
+    const limit = parseInt(req.query.limit) || 10;
+
+    const questions = await Question.findAll({
+      where: tenantFilter(req),
+      attributes: [
+        'qbs_question_id',
+        'qbs_questions',
+        'qbs_qst_type',
+        'qbs_chapter_id',
+        'created_at',
+      ],
+      include: [
+        { model: Chapter, as: 'chapter', attributes: ['qbs_chapter_name'] },
+      ],
+      order: [['created_at', 'DESC']],
+      limit,
+    });
+
+    return res.status(HTTPStatus.OK).json(questions);
+  } catch (err) {
+    err.status = HTTPStatus.BAD_REQUEST;
+    return next(err);
+  }
+}
+
+/**
+ * GET /api/dashboard/tenant-overview
+ * Get tenant overview (for tenant admins)
+ */
+export async function getTenantOverview(req, res, next) {
+  try {
+    const [questionCount, examCount, chapterCount, userCount] = await Promise.all([
+      Question.count({ where: tenantFilter(req) }),
+      Exam.count({ where: tenantFilter(req) }),
+      Chapter.count({ where: tenantFilter(req) }),
+      User.count({ where: tenantFilter(req) }),
+    ]);
+
+    return res.status(HTTPStatus.OK).json({
+      questions: questionCount,
+      exams: examCount,
+      chapters: chapterCount,
+      users: userCount,
+      tenant: req.tenant ? {
+        tenant_id: req.tenant.tenant_id,
+        tenant_name: req.tenant.tenant_name,
+        subscription_plan: req.tenant.subscription_plan,
+      } : null,
+    });
+  } catch (err) {
+    err.status = HTTPStatus.BAD_REQUEST;
+    return next(err);
+  }
 }
 

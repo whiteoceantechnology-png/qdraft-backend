@@ -103,7 +103,8 @@
     "webpack-sources": "1.0.2"
   },
   "dependencies": {
-    "bcrypt-nodejs": "^0.0.3",
+    "@faker-js/faker": "^8.4.1",
+    "bcrypt": "^5.1.1",
     "body-parser": "^1.17.1",
     "chalk": "^3.0.0",
     "compression": "^1.7.0",
@@ -117,15 +118,15 @@
     "http-status": "^1.0.1",
     "joi": "^18.0.1",
     "jsonwebtoken": "^9.0.2",
+    "mariadb": "^3.3.0",
     "method-override": "^2.3.8",
-    "mongoose": "^8.19.2",
-    "mongoose-unique-validator": "^4.0.1",
     "passport": "^0.7.0",
     "passport-jwt": "^4.0.1",
     "passport-local": "^1.0.0",
     "pm2": "^6.0.13",
     "pretty-error": "^2.1.1",
     "raven": "^0.6.0",
+    "sequelize": "^6.37.0",
     "slug": "^0.9.1",
     "winston": "^2.3.1"
   }

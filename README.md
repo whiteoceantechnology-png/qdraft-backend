@@ -1,6 +1,149 @@
-## Install Mongodb
+# QB-Server (Multi-Tenant Question Bank Server)
 
-With Homebrew you can just run `brew install mongodb` and after `brew services start mongodb`.
+A multi-tenant REST API server for Question Bank management, built with Express.js and MariaDB (Sequelize ORM).
+
+## Features
+
+- **Multi-Tenant Architecture**: Shared database with tenant isolation via `tenant_id`
+- **JWT Authentication**: Secure token-based auth with tenant context
+- **Role-Based Access Control**: Super Admin, Tenant Admin, Teacher, User roles
+- **Question Bank Management**: Questions, Chapters, Patterns, Blueprints
+- **Exam Management**: Create and manage exams
+- **Tenant Customization**: Settings, branding, subscription plans
+
+---
+
+## Quick Start
+
+### Prerequisites
+
+- Node.js >= 16.x
+- MariaDB >= 10.5
+- npm or yarn
+
+### Installation
+
+1. Clone the repository
+2. Install dependencies:
+   ```bash
+   npm install
+   ```
+
+3. Create `.env` file from example:
+   ```bash
+   cp .env.example .env
+   ```
+
+4. Configure your database settings in `.env`
+
+5. Start the development server:
+   ```bash
+   npm run dev
+   ```
+
+### Database Setup
+
+The server will automatically create tables on first run (in development mode).
+
+For production, run migrations manually or use `sequelize.sync()` once.
+
+---
+
+## Multi-Tenant Architecture
+
+### Tenant Isolation
+
+All data is isolated by `tenant_id`:
+- Each tenant has their own users, questions, exams, etc.
+- Queries automatically filter by `tenant_id` from JWT token
+- Same email/username can exist across different tenants
+
+### Authentication Flow
+
+1. User logs in with username/password
+2. Server validates credentials and tenant status
+3. JWT token issued with `{ user_id, tenant_id, role }`
+4. All subsequent requests include tenant context
+
+### Roles
+
+| Role | Description |
+|------|-------------|
+| `super_admin` | Platform-level admin, can manage all tenants |
+| `tenant_admin` | Admin for a specific tenant |
+| `teacher` | Can create/manage questions and exams |
+| `user` | Regular user, read-only access |
+
+---
+
+## API Endpoints
+
+### Authentication
+
+```
+POST /api/auth/login          - Login with credentials
+POST /api/auth/register       - Register new user
+GET  /api/auth/me             - Get current user
+POST /api/auth/change-password - Change password
+POST /api/auth/refresh        - Refresh JWT token
+```
+
+### Questions
+
+```
+GET    /api/questions         - List questions (paginated)
+GET    /api/questions/:id     - Get question by ID
+POST   /api/questions         - Create question
+PATCH  /api/questions/:id     - Update question
+DELETE /api/questions/:id     - Delete question
+```
+
+### Exams
+
+```
+GET    /api/exams             - List exams
+GET    /api/exams/:id         - Get exam by ID
+POST   /api/exams             - Create exam
+PATCH  /api/exams/:id         - Update exam
+DELETE /api/exams/:id         - Delete exam
+```
+
+### Other Resources
+
+- `/api/chapters` - Chapter management
+- `/api/patterns` - Pattern management
+- `/api/blueprints` - Blueprint management
+- `/api/questiontypes` - Question type management
+- `/api/dashboard` - Dashboard statistics
+- `/api/users` - User management
+
+### Seeds (Development Only)
+
+```
+GET  /api/seeds/clear         - Clear all data
+GET  /api/seeds/users/clear   - Clear seed users
+GET  /api/seeds/users/:count  - Create seed users
+POST /api/seeds/tenant        - Create new tenant with admin
+```
+
+---
+
+## Environment Variables
+
+See `.env.example` for all configuration options.
+
+Key variables:
+
+| Variable | Description |
+|----------|-------------|
+| `NODE_ENV` | Environment (development/test/production) |
+| `PORT` | Server port |
+| `JWT_SECRET` | Secret for JWT signing |
+| `DB_HOST_*` | Database host |
+| `DB_PORT_*` | Database port |
+| `DB_NAME_*` | Database name |
+| `DB_USER_*` | Database user |
+| `DB_PASS_*` | Database password |
 
 ---
 
@@ -159,15 +302,17 @@ bash scripts/development.sh
 - [Chai](https://github.com/chaijs/chai)
 - [Supertest](https://github.com/visionmedia/supertest)
 - [NPS](https://github.com/kentcdodds/nps)
-- [MongoDB](https://www.mongodb.com/)
-- [Mongoose](http://mongoosejs.com/)
+- [Sequelize](https://sequelize.org/)
+- [MariaDB](https://mariadb.org/)
 - [Webpack3](https://webpack.js.org/)
 
 ---
 
 ## Todo
 
-- [x] Test seeds controller - Done by [cpenarrieta](https://github.com/cpenarrieta)
+- [x] Multi-tenant architecture
+- [x] Sequelize ORM migration
 - [ ] Sendgrid or Other Mail supply
 - [ ] Add S3 for user image
-- [ ] Change Mocha for Jest
+- [ ] Add tenant management API
+- [ ] Add subscription management

@@ -1,45 +1,69 @@
-import mongoose from 'mongoose';
+/**
+ * Pattern Model - Sequelize for MariaDB
+ * Multi-tenant support with tenant_id
+ */
 
-const { Schema } = mongoose;
+import { DataTypes, Model } from 'sequelize';
+import { sequelize } from '../config/database.js';
 
-const PatternQuestionSchema = new Schema(
+class Pattern extends Model {}
+
+Pattern.init(
   {
-    qbs_qst_id: { type: Number, required: true },
-    qbs_qst_type: { type: Number, required: true },
+    qbs_ptn_id: {
+      type: DataTypes.INTEGER,
+      primaryKey: true,
+      autoIncrement: true,
+    },
+    tenant_id: {
+      type: DataTypes.INTEGER,
+      allowNull: false,
+      references: {
+        model: 'tenants',
+        key: 'tenant_id',
+      },
+    },
+    qbs_ptn_name: {
+      type: DataTypes.STRING(255),
+      allowNull: false,
+    },
+    qbs_chapter_id: {
+      type: DataTypes.INTEGER,
+      allowNull: false,
+    },
+    total_mark: {
+      type: DataTypes.DECIMAL(10, 2),
+      allowNull: false,
+    },
+    sub_notes: {
+      type: DataTypes.JSON,
+      defaultValue: {},
+    },
+    // Store questions array as JSON
+    qbs_ptn_questions: {
+      type: DataTypes.JSON,
+      defaultValue: [],
+    },
+    qbs_ptn_added_by: {
+      type: DataTypes.INTEGER,
+      defaultValue: 0,
+    },
+    qbs_ptn_added_at: {
+      type: DataTypes.DATE,
+      defaultValue: DataTypes.NOW,
+    },
   },
-  { _id: false, versionKey: false }
-);
-
-const PatternSchema = new Schema(
   {
-    qbs_ptn_id: { type: Number, unique: true, index: true },
-    qbs_ptn_name: { type: String, required: true, trim: true },
-    qbs_chapter_id: { type: Number, required: true, ref: 'Chapter' },
-    total_mark: { type: Number, required: true },
-    sub_notes: { type: Schema.Types.Mixed, default: {} },
-    qbs_ptn_questions: { type: [PatternQuestionSchema], default: [] },
-    qbs_ptn_added_by: { type: Number, default: 0 },
-    qbs_ptn_added_at: { type: Date, default: Date.now }
-  },
-  {
+    sequelize,
+    modelName: 'Pattern',
+    tableName: 'patterns',
     timestamps: false,
-    versionKey: false,
-    collection: 'patterns'
+    indexes: [
+      { fields: ['tenant_id'] },
+      { fields: ['qbs_chapter_id'] },
+      { fields: ['tenant_id', 'qbs_chapter_id'] },
+    ],
   }
 );
 
-// Auto-increment qbs_ptn_id
-PatternSchema.pre('save', async function (next) {
-  try {
-    if (this.isNew && !this.qbs_ptn_id) {
-      const last = await mongoose.models.Pattern.findOne().sort('-qbs_ptn_id').select('qbs_ptn_id').lean().exec();
-      this.qbs_ptn_id = last && last.qbs_ptn_id ? last.qbs_ptn_id + 1 : 1;
-    }
-    next();
-  } catch (err) {
-    next(err);
-  }
-});
-
-const Pattern = mongoose.models.Pattern || mongoose.model('Pattern', PatternSchema);
 export default Pattern;

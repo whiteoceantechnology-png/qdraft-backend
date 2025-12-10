@@ -1,124 +1,75 @@
-/* eslint-disable import/no-mutable-exports */
+/**
+ * Post Model - Sequelize for MariaDB
+ * Multi-tenant support with tenant_id
+ */
 
-import mongoose, { Schema } from 'mongoose';
-import uniqueValidator from 'mongoose-unique-validator';
+import { DataTypes, Model } from 'sequelize';
 import slug from 'slug';
+import { sequelize } from '../config/database.js';
 
-const PostSchema = new Schema(
+class Post extends Model {}
+
+Post.init(
   {
+    post_id: {
+      type: DataTypes.INTEGER,
+      primaryKey: true,
+      autoIncrement: true,
+    },
+    tenant_id: {
+      type: DataTypes.INTEGER,
+      allowNull: false,
+      references: {
+        model: 'tenants',
+        key: 'tenant_id',
+      },
+    },
     title: {
-      type: String,
-      trim: true,
-      required: [true, 'Title is required!'],
-      minlength: [3, 'Title must be longer!'],
-      unique: true,
+      type: DataTypes.STRING(255),
+      allowNull: false,
     },
     text: {
-      type: String,
-      required: [true, 'Some text are required!'],
+      type: DataTypes.TEXT('long'),
+      allowNull: false,
     },
     slug: {
-      type: String,
-      trim: true,
-      lowercase: true,
-      unique: true,
+      type: DataTypes.STRING(255),
+      allowNull: true,
     },
-    author: {
-      type: Schema.Types.ObjectId,
-      ref: 'User',
-      required: [true, 'Author is required!'],
+    author_id: {
+      type: DataTypes.INTEGER,
+      allowNull: false,
     },
     favoriteCount: {
-      type: Number,
-      default: 0,
+      type: DataTypes.INTEGER,
+      defaultValue: 0,
     },
   },
-  { timestamps: true },
+  {
+    sequelize,
+    modelName: 'Post',
+    tableName: 'posts',
+    timestamps: true,
+    createdAt: 'created_at',
+    updatedAt: 'updated_at',
+    indexes: [
+      { fields: ['tenant_id'] },
+      { fields: ['author_id'] },
+      { unique: true, fields: ['tenant_id', 'slug'] },
+    ],
+    hooks: {
+      beforeCreate: (post) => {
+        if (post.title) {
+          post.slug = slug(post.title, { lower: true });
+        }
+      },
+      beforeUpdate: (post) => {
+        if (post.changed('title')) {
+          post.slug = slug(post.title, { lower: true });
+        }
+      },
+    },
+  }
 );
-
-PostSchema.plugin(uniqueValidator, {
-  message: '{VALUE} already taken!',
-});
-
-/**
- * Slugify the text on validation hook
- */
-PostSchema.pre('validate', function(next) {
-  this.slugify();
-
-  next();
-});
-
-PostSchema.statics = {
-  /**
-   * Create a post
-   *
-   * @public
-   * @param {Object} args - Object contains title and text
-   * @param {String} authorId - the author id
-   * @returns {Post} Post Object - new post create
-   */
-  createPost(args, authorId) {
-    return this.create({
-      ...args,
-      author: authorId,
-    });
-  },
-
-  /**
-   * If you call list() with zero arguments, the destructuring fails,
-   * because you can’t match an object pattern against undefined.
-   * That can be fixed via a default value. In the following code,
-   * the object pattern is matched against {} if there isn’t at least one argument.
-   */
-  list({ skip = 0, limit = 10 } = {}) {
-    return this.find()
-      .sort({ createdAt: -1 })
-      .skip(skip)
-      .limit(limit)
-      .populate('author');
-  },
-
-  incFavoriteCount(postId) {
-    return this.findByIdAndUpdate(postId, { $inc: { favoriteCount: 1 } });
-  },
-
-  decFavoriteCount(postId) {
-    return this.findByIdAndUpdate(postId, { $inc: { favoriteCount: -1 } });
-  },
-};
-
-PostSchema.methods = {
-  /**
-   * Slug the title and add this to the slug prop
-   */
-  slugify() {
-    this.slug = slug(this.title);
-  },
-  /**
-   * Parse the post in format we want to send.
-   *
-   * @public
-   * @returns {Post} Post Object
-   */
-  toJSON() {
-    return {
-      _id: this._id,
-      title: this.title,
-      text: this.text,
-      author: this.author,
-      createdAt: this.createdAt,
-      favoriteCount: this.favoriteCount,
-    };
-  },
-};
-
-let Post;
-
-try {
-  Post = mongoose.model('Post');
-} catch (e) {
-  Post = mongoose.model('Post', PostSchema);
-}
 
 export default Post;

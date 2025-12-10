@@ -1,91 +1,70 @@
-import mongoose from 'mongoose';
+/**
+ * Blueprint Model - Sequelize for MariaDB
+ * Multi-tenant support with tenant_id
+ */
 
-const { Schema } = mongoose;
+import { DataTypes, Model } from 'sequelize';
+import { sequelize } from '../config/database.js';
 
-const BlueprintMarkSchema = new Schema(
-  {
-    qbs_bmark_id: {
-      type: Number,
-      required: true,
-      index: true,
-    },
-    qbs_blp_chapter_id: {
-      type: Number,
-      required: true,
-    },
-    qbs_blp_mark: {
-      type: Number,
-      default: null,
-    },
-    // Store generic marks as an object/Map; accept JSON string and parse it automatically
-    qbs_generic_marks: {
-      type: Schema.Types.Mixed,
-      set(value) {
-        if (typeof value === 'string') {
-          try {
-            return JSON.parse(value);
-          } catch (e) {
-            // If parsing fails, store raw string
-            return value;
-          }
-        }
-        return value;
-      },
-    },
-  },
-  {
-    _id: false, // disable child-doc _id if you don't need it
-    versionKey: false,
-  },
-);
+class Blueprint extends Model {}
 
-const blueprintSchema = new Schema(
+Blueprint.init(
   {
     qbs_blp_id: {
-      type: Number,
-      required: true,
-      unique: true,
-      index: true,
+      type: DataTypes.INTEGER,
       primaryKey: true,
+      autoIncrement: true,
+    },
+    tenant_id: {
+      type: DataTypes.INTEGER,
+      allowNull: false,
+      references: {
+        model: 'tenants',
+        key: 'tenant_id',
+      },
     },
     qbs_blp_name: {
-      type: String,
-      required: true,
-      trim: true,
+      type: DataTypes.STRING(255),
+      allowNull: false,
     },
     qbs_blp_added_by: {
-      type: Number,
-      required: true,
+      type: DataTypes.INTEGER,
+      allowNull: false,
     },
     qbs_blp_dept_id: {
-      type: Number,
-      required: true,
+      type: DataTypes.INTEGER,
+      allowNull: false,
     },
     qbs_sub_id: {
-      type: Number,
-      required: true,
+      type: DataTypes.INTEGER,
+      allowNull: false,
     },
     qbs_creative: {
-      type: Number,
-      default: 0,
+      type: DataTypes.INTEGER,
+      defaultValue: 0,
     },
-    qbs_blp_added_at:{
-      type: Date,
-      default: Date.now,
+    qbs_blp_added_at: {
+      type: DataTypes.DATE,
+      defaultValue: DataTypes.NOW,
     },
+    // Blueprint marks stored as JSON array
     blueprint_marks: {
-      type: [BlueprintMarkSchema],
-      default: [],
+      type: DataTypes.JSON,
+      defaultValue: [],
     },
   },
   {
-    timestamps: false, // adds createdAt and updatedAt
-    versionKey: false, // disable __v
-    collection: 'blueprints',
-  },
+    sequelize,
+    modelName: 'Blueprint',
+    tableName: 'blueprints',
+    timestamps: false,
+    indexes: [
+      { fields: ['tenant_id'] },
+      { fields: ['qbs_blp_added_by'] },
+      { fields: ['qbs_sub_id'] },
+      { fields: ['tenant_id', 'qbs_blp_added_by'] },
+    ],
+  }
 );
-
-// Ensure model registration is idempotent (works with hot-reload)
-const Blueprint = mongoose.models.Blueprint || mongoose.model('Blueprint', blueprintSchema);
 
 export default Blueprint;

@@ -1,100 +1,64 @@
 /**
- * Post Controller
+ * Post Controller - Sequelize for MariaDB
+ * Multi-tenant support with tenant_id filtering
  */
 
 import Joi from 'joi';
 import HTTPStatus from 'http-status';
-import contants from '../config/constants.js';
-
-import { filteredBody } from '../utils/filteredBody.js';
+import Post from '../models/post.model.js';
 import User from '../models/user.model.js';
 
+/**
+ * Validation schemas
+ */
 export const validation = {
   create: {
-    body: {
-      title: Joi.string()
-        .min(3)
-        .required(),
-      text: Joi.string().required(),
-    },
+    body: Joi.object({
+      title: Joi.string().min(3).required(),
+      text: Joi.string().min(10).required(),
+    }),
   },
   update: {
-    body: {
+    body: Joi.object({
       title: Joi.string().min(3),
-      text: Joi.string(),
-    },
+      text: Joi.string().min(10),
+    }),
   },
 };
 
 /**
- * @api {get} /posts Get posts
- * @apiDescription Get a list of posts
- * @apiName getListOfPost
- * @apiGroup Post
- *
- * @apiHeader {Authorization} Authorization JWT Token
- *
- * @apiParam (query) {Int} skip Number of skip posts
- * @apiParam (query) {Int} limit Maximum number of posts
- *
- * @apiSuccess {Number} status Status of the Request.
- * @apiSuccess {Object[]} post Post list.
- * @apiSuccess {String} post._id Post _id.
- * @apiSuccess {String} post.title Post title.
- * @apiSuccess {String} post.text Post text.
- * @apiSuccess {Object} post.author Post author.
- * @apiSuccess {String} post.author._id Post author _id.
- * @apiSuccess {String} post.author.username Post author username.
- * @apiSuccess {String} post.createdAt Post created date.
- *
- *
- * @apiParam (Login) {String} pass Only logged in users can do this.
- *
- * @apiHeaderExample {json} Header-Example:
- * {
- *  "AUTHORIZATION": "JWT eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJfaWQiOiI1OTBhMWI3ODAzMDI3N2NiNjQxM2JhZGUiLCJpYXQiOjE0OTM4MzQ2MTZ9.RSlMF6RRwAALZQRdfKrOZWnuHBk-mQNnRcCLJsc8zio"
- * }
- *
- * @apiSuccessExample Success-Response:
- *
- * HTTP/1.1 200 OK
- *
- * [
- *  {
- *    _id: '123',
- *    title: 'New title 1',
- *    text: 'New text 1',
- *    createdAt: '2017-05-03',
- *    author: {
- *      _id: '123312',
- *      username: 'Jon'
- *    }
- *  },
- *  {
- *    _id: '12234',
- *    title: 'New title 2',
- *    text: 'New text 2',
- *    createdAt: '2017-05-03',
- *    author: {
- *      _id: '123312234',
- *      username: 'Jon'
- *    }
- *  }
- * ]
- *
- * @apiErrorExample {json} Post not found
- *    HTTP/1.1 404 Not Found
- * @apiErrorExample {json} Unauthorized
- *    HTTP/1.1 401 Unauthorized
+ * GET /api/posts
+ * Get all posts with pagination (tenant-scoped)
  */
 export async function getList(req, res, next) {
   try {
-    const promise = await Promise.all([
-      User.findById(req.user._id),
-      Post.list({ skip: req.query.skip, limit: req.query.limit }),
-    ]);
+    const limit = parseInt(req.query.limit, 10) || 10;
+    const page = parseInt(req.query.page, 10) || 1;
+    const offset = (page - 1) * limit;
 
-    return res.status(HTTPStatus.OK).json({});
+    const { count, rows: posts } = await Post.findAndCountAll({
+      where: { tenant_id: req.tenantId },
+      include: [
+        {
+          model: User,
+          as: 'author',
+          attributes: ['user_id', 'username', 'email', 'user_fname'],
+        },
+      ],
+      limit,
+      offset,
+      order: [['createdAt', 'DESC']],
+    });
+
+    return res.status(HTTPStatus.OK).json({
+      posts,
+      pagination: {
+        total: count,
+        page,
+        limit,
+        pages: Math.ceil(count / limit),
+      },
+    });
   } catch (err) {
     err.status = HTTPStatus.BAD_REQUEST;
     return next(err);
@@ -102,63 +66,32 @@ export async function getList(req, res, next) {
 }
 
 /**
- * @api {get} /posts/:id Get a single post
- * @apiDescription Get a single post
- * @apiName getPost
- * @apiGroup Post
- *
- * @apiHeader {Authorization} Authorization JWT Token
- *
- * @apiSuccess {Number} status Status of the Request.
- * @apiSuccess {Object} post Post created.
- * @apiSuccess {String} post._id Post _id.
- * @apiSuccess {String} post.title Post title.
- * @apiSuccess {String} post.text Post text.
- * @apiSuccess {Object} post.author Post author.
- * @apiSuccess {String} post.author._id Author id.
- * @apiSuccess {String} post.author.username Author username.
- * @apiSuccess {String} post.createdAt Post created date.
- * @apiSuccess {Boolean} favorite User have favorite post
- *
- * @apiParam (Login) {String} pass Only logged in users can do this.
- *
- * @apiHeaderExample {json} Header-Example:
- * {
- *  "AUTHORIZATION": "JWT eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJfaWQiOiI1OTBhMWI3ODAzMDI3N2NiNjQxM2JhZGUiLCJpYXQiOjE0OTM4MzQ2MTZ9.RSlMF6RRwAALZQRdfKrOZWnuHBk-mQNnRcCLJsc8zio"
- * }
- *
- * @apiSuccessExample Success-Response:
- *
- * HTTP/1.1 200 OK
- *
- * {
- *  _id: '123',
- *  title: 'a title',
- *  text: 'a text',
- *  createdAt: '2017-05-03',
- *  author: {
- *    _id: '123312',
- *    username: 'Jon'
- *  },
- *  favorite: true
- * }
- *
- * @apiErrorExample {json} Post not found
- *    HTTP/1.1 404 Not Found
- * @apiErrorExample {json} Unauthorized
- *    HTTP/1.1 401 Unauthorized
+ * GET /api/posts/:id
+ * Get post by ID (tenant-scoped)
  */
 export async function getById(req, res, next) {
   try {
-    const promise = await Promise.all([
-      User.findById(req.user._id),
-      Post.findById(req.params.id).populate('author'),
-    ]);
-    const favorite = promise[0]._favorites.isPostIsFavorite(req.params.id);
-    return res.status(HTTPStatus.OK).json({
-      ...promise[1].toJSON(),
-      favorite,
+    const post = await Post.findOne({
+      where: {
+        post_id: req.params.id,
+        tenant_id: req.tenantId,
+      },
+      include: [
+        {
+          model: User,
+          as: 'author',
+          attributes: ['user_id', 'username', 'email', 'user_fname'],
+        },
+      ],
     });
+
+    if (!post) {
+      return res.status(HTTPStatus.NOT_FOUND).json({
+        message: 'Post not found',
+      });
+    }
+
+    return res.status(HTTPStatus.OK).json(post);
   } catch (err) {
     err.status = HTTPStatus.BAD_REQUEST;
     return next(err);
@@ -166,52 +99,31 @@ export async function getById(req, res, next) {
 }
 
 /**
- * @api {post} /posts Create a post
- * @apiDescription Create a post
- * @apiName createPost
- * @apiGroup Post
- *
- * @apiParam (Body) {String} title Post title.
- * @apiParam (Body) {String} text Post text.
- *
- * @apiHeader {Authorization} Authorization JWT Token
- *
- * @apiSuccess {Number} status Status of the Request.
- * @apiSuccess {Object} post Post created.
- * @apiSuccess {String} post._id Post _id.
- * @apiSuccess {String} post.title Post title.
- * @apiSuccess {String} post.text Post text.
- * @apiSuccess {String} post.author Post author id.
- * @apiSuccess {String} post.createdAt Post created date.
- *
- * @apiParam (Login) {String} pass Only logged in users can do this.
- *
- * @apiHeaderExample {json} Header-Example:
- * {
- *  "AUTHORIZATION": "JWT eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJfaWQiOiI1OTBhMWI3ODAzMDI3N2NiNjQxM2JhZGUiLCJpYXQiOjE0OTM4MzQ2MTZ9.RSlMF6RRwAALZQRdfKrOZWnuHBk-mQNnRcCLJsc8zio"
- * }
- *
- * @apiSuccessExample Success-Response:
- *
- * HTTP/1.1 200 OK
- *
- * {
- *  _id: '123',
- *  title: 'a title',
- *  text: 'a text',
- *  createdAt: '2017-05-03',
- *  author: '123312'
- * }
- *
- * @apiErrorExample {json} Unauthorized
- *    HTTP/1.1 401 Unauthorized
+ * POST /api/posts
+ * Create a new post (tenant-scoped)
  */
 export async function create(req, res, next) {
-  const body = filteredBody(req.body, contants.WHITELIST.posts.create);
   try {
-    return res
-      .status(HTTPStatus.CREATED)
-      .json(await Post.createPost(body, req.user._id));
+    const post = await Post.create({
+      tenant_id: req.tenantId,
+      title: req.body.title,
+      text: req.body.text,
+      author_id: req.user.user_id,
+    });
+
+    // Fetch with author details
+    const postWithAuthor = await Post.findOne({
+      where: { post_id: post.post_id },
+      include: [
+        {
+          model: User,
+          as: 'author',
+          attributes: ['user_id', 'username', 'email', 'user_fname'],
+        },
+      ],
+    });
+
+    return res.status(HTTPStatus.CREATED).json(postWithAuthor);
   } catch (err) {
     err.status = HTTPStatus.BAD_REQUEST;
     return next(err);
@@ -219,110 +131,87 @@ export async function create(req, res, next) {
 }
 
 /**
- * @api {delete} /posts/:id Delete a post
- * @apiDescription Delete a post if the author it's the right one
- * @apiName deletePost
- * @apiGroup Post
- *
- * @apiHeader {Authorization} Authorization JWT Token
- *
- * @apiParam {String} id Post unique ID.
- *
- * @apiParam (Login) {String} pass Only logged in users can do this.
- *
- * @apiSuccess {Number} status Status of the Request.
- *
- * @apiHeaderExample {json} Header-Example:
- * {
- *  "AUTHORIZATION": "JWT eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJfaWQiOiI1OTBhMWI3ODAzMDI3N2NiNjQxM2JhZGUiLCJpYXQiOjE0OTM4MzQ2MTZ9.RSlMF6RRwAALZQRdfKrOZWnuHBk-mQNnRcCLJsc8zio"
- * }
- *
- * @apiSuccessExample Success-Response:
- *
- * HTTP/1.1 200 OK
- *
- * 200
- *
- * @apiErrorExample {json} Post not found
- *    HTTP/1.1 404 Not Found
- * @apiErrorExample {json} Unauthorized
- *    HTTP/1.1 401 Unauthorized
- *
+ * PATCH /api/posts/:id
+ * Update a post (tenant-scoped, author only)
+ */
+export async function updatePost(req, res, next) {
+  try {
+    const post = await Post.findOne({
+      where: {
+        post_id: req.params.id,
+        tenant_id: req.tenantId,
+      },
+    });
+
+    if (!post) {
+      return res.status(HTTPStatus.NOT_FOUND).json({
+        message: 'Post not found',
+      });
+    }
+
+    // Check if user is author
+    if (post.author_id !== req.user.user_id) {
+      return res.status(HTTPStatus.UNAUTHORIZED).json({
+        message: 'Unauthorized to update this post',
+      });
+    }
+
+    const updateFields = {};
+    if (req.body.title) updateFields.title = req.body.title;
+    if (req.body.text) updateFields.text = req.body.text;
+
+    await post.update(updateFields);
+
+    // Fetch with author details
+    const updatedPost = await Post.findOne({
+      where: { post_id: post.post_id },
+      include: [
+        {
+          model: User,
+          as: 'author',
+          attributes: ['user_id', 'username', 'email', 'user_fname'],
+        },
+      ],
+    });
+
+    return res.status(HTTPStatus.OK).json(updatedPost);
+  } catch (err) {
+    err.status = HTTPStatus.BAD_REQUEST;
+    return next(err);
+  }
+}
+
+/**
+ * DELETE /api/posts/:id
+ * Delete a post (tenant-scoped, author only)
  */
 export async function deletePost(req, res, next) {
   try {
-    const post = await Post.findById(req.params.id);
-
-    if (post.author.toString() !== req.user._id.toString()) {
-      return res.sendStatus(HTTPStatus.UNAUTHORIZED);
-    }
-    await post.remove();
-    return res.sendStatus(HTTPStatus.OK);
-  } catch (err) {
-    err.status = HTTPStatus.BAD_REQUEST;
-    return next(err);
-  }
-}
-
-/**
- * @api {patch} /posts/:id Update a post
- * @apiDescription Update a post if the author it's the right one
- * @apiName updatePost
- * @apiGroup Post
- *
- * @apiHeader {Authorization} Authorization JWT Token
- *
- * @apiParam {String} id Post unique ID.
- *
- * @apiParam (Body) {String} [title] Post title.
- * @apiParam (Body) {String} [text] Post text.
- *
- * @apiSuccess {Number} status Status of the Request.
- * @apiSuccess {Object} post Post updated.
- * @apiSuccess {String} post._id Post _id.
- * @apiSuccess {String} post.title Post title.
- * @apiSuccess {String} post.text Post text.
- * @apiSuccess {String} post.author Post author id.
- * @apiSuccess {String} post.createdAt Post created date.
- *
- * @apiParam (Login) {String} pass Only logged in users can do this.
- *
- * @apiHeaderExample {json} Header-Example:
- * {
- *  "AUTHORIZATION": "JWT eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJfaWQiOiI1OTBhMWI3ODAzMDI3N2NiNjQxM2JhZGUiLCJpYXQiOjE0OTM4MzQ2MTZ9.RSlMF6RRwAALZQRdfKrOZWnuHBk-mQNnRcCLJsc8zio"
- * }
- *
- * @apiSuccessExample Success-Response:
- *
- * HTTP/1.1 200 OK
- *
- * {
- *  _id: '123',
- *  title: 'New title',
- *  text: 'New text',
- *  createdAt: '2017-05-03',
- *  author: '123312'
- * }
- *
- * @apiErrorExample {json} Post not found
- *    HTTP/1.1 404 Not Found
- * @apiErrorExample {json} Unauthorized
- *    HTTP/1.1 401 Unauthorized
- */
-export async function updatePost(req, res, next) {
-  const body = filteredBody(req.body, contants.WHITELIST.posts.update);
-  try {
-    const post = await Post.findById(req.params.id);
-
-    if (post.author.toString() !== req.user._id.toString()) {
-      return res.sendStatus(HTTPStatus.UNAUTHORIZED);
-    }
-
-    Object.keys(body).forEach(key => {
-      post[key] = body[key];
+    const post = await Post.findOne({
+      where: {
+        post_id: req.params.id,
+        tenant_id: req.tenantId,
+      },
     });
 
-    return res.status(HTTPStatus.OK).json(await post.save());
+    if (!post) {
+      return res.status(HTTPStatus.NOT_FOUND).json({
+        message: 'Post not found',
+      });
+    }
+
+    // Check if user is author
+    if (post.author_id !== req.user.user_id) {
+      return res.status(HTTPStatus.UNAUTHORIZED).json({
+        message: 'Unauthorized to delete this post',
+      });
+    }
+
+    await post.destroy();
+
+    return res.status(HTTPStatus.OK).json({
+      message: 'Post deleted successfully',
+    });
   } catch (err) {
     err.status = HTTPStatus.BAD_REQUEST;
     return next(err);
@@ -330,38 +219,64 @@ export async function updatePost(req, res, next) {
 }
 
 /**
- * @api {post} /posts/:id/favorite Favorite a post
- * @apiDescription Favorite a post or unfavorite if already.
- * @apiName favoritePost
- * @apiGroup Post
- *
- * @apiHeader {Authorization} Authorization JWT Token
- *
- * @apiParam {String} id Post unique ID.
- *
- * @apiSuccess {Number} status Status of the Request.
- *
- * @apiParam (Login) {String} pass Only logged in users can do this.
- *
- * @apiHeaderExample {json} Header-Example:
- * {
- *  "AUTHORIZATION": "JWT eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJfaWQiOiI1OTBhMWI3ODAzMDI3N2NiNjQxM2JhZGUiLCJpYXQiOjE0OTM4MzQ2MTZ9.RSlMF6RRwAALZQRdfKrOZWnuHBk-mQNnRcCLJsc8zio"
- * }
- *
- * @apiSuccessExample Success-Response:
- *
- * HTTP/1.1 200 OK
- *
- * @apiErrorExample {json} Post not found
- *    HTTP/1.1 404 Not Found
- * @apiErrorExample {json} Unauthorized
- *    HTTP/1.1 401 Unauthorized
+ * POST /api/posts/:id/favorite
+ * Toggle favorite on a post (tenant-scoped)
  */
 export async function favoritePost(req, res, next) {
   try {
-    const user = await User.findById(req.user._id);
-    await user._favorites.posts(req.params.id);
-    return res.sendStatus(HTTPStatus.OK);
+    const post = await Post.findOne({
+      where: {
+        post_id: req.params.id,
+        tenant_id: req.tenantId,
+      },
+    });
+
+    if (!post) {
+      return res.status(HTTPStatus.NOT_FOUND).json({
+        message: 'Post not found',
+      });
+    }
+
+    // Get user to check favorites
+    const user = await User.findOne({
+      where: { user_id: req.user.user_id },
+    });
+
+    // Get current favorites (stored as JSON array in user)
+    let favorites = user.favorites || [];
+
+    const postId = post.post_id;
+    const isFavorited = favorites.includes(postId);
+
+    if (isFavorited) {
+      // Remove from favorites
+      favorites = favorites.filter((id) => id !== postId);
+      await post.update({ favoriteCount: Math.max(0, post.favoriteCount - 1) });
+    } else {
+      // Add to favorites
+      favorites.push(postId);
+      await post.update({ favoriteCount: post.favoriteCount + 1 });
+    }
+
+    // Update user favorites
+    await user.update({ favorites });
+
+    // Fetch updated post
+    const updatedPost = await Post.findOne({
+      where: { post_id: postId },
+      include: [
+        {
+          model: User,
+          as: 'author',
+          attributes: ['user_id', 'username', 'email', 'user_fname'],
+        },
+      ],
+    });
+
+    return res.status(HTTPStatus.OK).json({
+      post: updatedPost,
+      isFavorited: !isFavorited,
+    });
   } catch (err) {
     err.status = HTTPStatus.BAD_REQUEST;
     return next(err);

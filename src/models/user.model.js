@@ -1,171 +1,50 @@
-/* eslint-disable import/no-mutable-exports */
+/**
+ * User Model - Sequelize for MariaDB
+ * Multi-tenant support with tenant_id
+ */
 
-import mongoose, { Schema } from 'mongoose';
-import { hashSync, compareSync } from 'bcrypt-nodejs';
+import { DataTypes, Model } from 'sequelize';
+import bcrypt from 'bcrypt';
 import jwt from 'jsonwebtoken';
-import uniqueValidator from 'mongoose-unique-validator';
-
+import { sequelize } from '../config/database.js';
 import constants from '../config/constants.js';
 
-const UserSchema = new Schema(
-  {
-    email: {
-      type: String,
-      unique: true,
-      required: [true, 'Email is required!'],
-      trim: true,
-      validate: {
-        validator(email) {
-          const emailRegex = /^[-a-z0-9%S_+]+(\.[-a-z0-9%S_+]+)*@(?:[a-z0-9-]{1,63}\.){1,125}[a-z]{2,63}$/i;
-          return emailRegex.test(email);
-        },
-        message: '{VALUE} is not a valid email!',
-      },
-    },
-    mobile_number: {
-      type: String,
-      trim: true,
-    },
-    user_fname: {
-      type: String,
-      trim: true,     
-    },
-    user_id: {
-      type: Number,
-      unique: true,
-    },
-    school_name: {
-      type: String,
-      trim: true,
-    },
-    setup_id: {
-      type: Number,
-    },  
-    board: {
-      type: String,
-      trim: true,
-    },
-    class_name: {
-      type: String,
-      trim: true,
-    },
-    username: {
-      type: String,
-      trim: true,
-      unique: true,
-    },
-    dept_id: {
-      type: Number,
-    },
-    subject: {
-      type: String,
-      trim: true,
-    },
-    subject_id: {
-      type: Number,
-    },  
-    medium: {
-      type: Number,
-    },
-    start_date: {
-      type: Date,
-    },
-    end_date: {
-      type: Date,
-    },
-    is_demo_user: {
-      type: Boolean,
-      default: false,
-    },
-    password: {
-      type: String,
-      required: [true, 'Password is required!'],
-      trim: true,
-      minlength: [6, 'Password need to be longer!'],
-      validate: {
-        validator(password) {
-          // At least 6 chars and at least one digit
-          return typeof password === 'string' && password.length >= 6 && /\d/.test(password);
-        },
-        message: 'Password must be at least 6 characters and contain a number!',
-      },
-    },
-  },
-  { timestamps: true, versionKey: false },
-);
-
-UserSchema.plugin(uniqueValidator, {
-  message: '{VALUE} already taken!',
-});
-
-// Hash the user password and assign user_id on creation
-UserSchema.pre('save', async function(next) {
-  if (this.isModified('password')) {
-    this.password = this._hashPassword(this.password);
-  }
-  if (this.isNew) {
-    const lastUser = await mongoose.models.User.findOne().sort('-user_id').exec();
-    this.user_id = lastUser ? lastUser.user_id + 1 : 10000;
-  }
-  next();
-});
-
-UserSchema.methods = {
+class User extends Model {
   /**
-   * Favorites actions
-   *
-   * @public
-   */
-  /**
-   * Authenticate the user
-   *
-   * @public
-   * @param {String} password - provided by the user
-   * @returns {Boolean} isMatch - password match
+   * Authenticate the user password
    */
   authenticateUser(password) {
-    return compareSync(password, this.password);
-  },
-  /**
-   * Hash the user password
-   *
-   * @private
-   * @param {String} password - user password choose
-   * @returns {String} password - hash password
-   */
-  _hashPassword(password) {
-    return hashSync(password);
-  },
+    return bcrypt.compareSync(password, this.password);
+  }
 
   /**
-   * Generate a jwt token for authentication
-   *
-   * @public
-   * @returns {String} token - JWT token
+   * Generate JWT token with tenant_id included
    */
   createToken() {
     return jwt.sign(
       {
         user_id: this.user_id,
+        tenant_id: this.tenant_id,
+        role: this.role,
       },
       constants.JWT_SECRET,
+      { expiresIn: '7d' }
     );
-  },
+  }
 
   /**
-   * Parse the user object in data we wanted to send when is auth
-   *
-   * @public
-   * @returns {Object} User - ready for auth
+   * Return user data for authentication response
    */
   toAuthJSON() {
     return {
       access_token: `JWT ${this.createToken()}`,
       user_id: this.user_id,
+      tenant_id: this.tenant_id,
       user_fname: this.user_fname,
       username: this.username,
-      setup_id: this.setup_id,
       email: this.email,
+      role: this.role,
+      setup_id: this.setup_id,
       school_name: this.school_name,
       subject: this.subject,
       subject_id: this.subject_id,
@@ -174,26 +53,150 @@ UserSchema.methods = {
       medium: this.medium,
       start_date: this.start_date,
       end_date: this.end_date,
-      medium: this.medium,
     };
-  },
+  }
 
   /**
-   * Parse the user object in data we wanted to send
-   *
-   * @public
-   * @returns {Object} User - ready for populate
+   * Return minimal user data
    */
   toJSON() {
-    return {
-      user_id: this.user_id,
-      username: this.username,
-    };
+    const values = { ...this.get() };
+    delete values.password;
+    return values;
+  }
+}
+
+User.init(
+  {
+    user_id: {
+      type: DataTypes.INTEGER,
+      primaryKey: true,
+      autoIncrement: true,
+    },
+    tenant_id: {
+      type: DataTypes.INTEGER,
+      allowNull: false,
+      references: {
+        model: 'tenants',
+        key: 'tenant_id',
+      },
+    },
+    email: {
+      type: DataTypes.STRING(255),
+      allowNull: false,
+      validate: {
+        isEmail: true,
+      },
+    },
+    username: {
+      type: DataTypes.STRING(100),
+      allowNull: false,
+    },
+    password: {
+      type: DataTypes.STRING(255),
+      allowNull: false,
+    },
+    user_fname: {
+      type: DataTypes.STRING(255),
+      allowNull: true,
+    },
+    mobile_number: {
+      type: DataTypes.STRING(50),
+      allowNull: true,
+    },
+    school_name: {
+      type: DataTypes.STRING(255),
+      allowNull: true,
+    },
+    setup_id: {
+      type: DataTypes.INTEGER,
+      allowNull: true,
+    },
+    board: {
+      type: DataTypes.STRING(100),
+      allowNull: true,
+    },
+    class_name: {
+      type: DataTypes.STRING(100),
+      allowNull: true,
+    },
+    dept_id: {
+      type: DataTypes.INTEGER,
+      allowNull: true,
+    },
+    subject: {
+      type: DataTypes.STRING(100),
+      allowNull: true,
+    },
+    subject_id: {
+      type: DataTypes.INTEGER,
+      allowNull: true,
+    },
+    medium: {
+      type: DataTypes.INTEGER,
+      allowNull: true,
+    },
+    start_date: {
+      type: DataTypes.DATE,
+      allowNull: true,
+    },
+    end_date: {
+      type: DataTypes.DATE,
+      allowNull: true,
+    },
+    is_demo_user: {
+      type: DataTypes.BOOLEAN,
+      defaultValue: false,
+    },
+    role: {
+      type: DataTypes.ENUM('super_admin', 'tenant_admin', 'teacher', 'user'),
+      defaultValue: 'user',
+    },
+    is_active: {
+      type: DataTypes.BOOLEAN,
+      defaultValue: true,
+    },
+    last_login: {
+      type: DataTypes.DATE,
+      allowNull: true,
+    },
+    favorites: {
+      type: DataTypes.JSON,
+      defaultValue: [],
+    },
   },
-};
-
-
-  const User = mongoose.model('User', UserSchema);
-
+  {
+    sequelize,
+    modelName: 'User',
+    tableName: 'users',
+    timestamps: true,
+    createdAt: 'created_at',
+    updatedAt: 'updated_at',
+    indexes: [
+      {
+        unique: true,
+        fields: ['tenant_id', 'email'],
+        name: 'unique_tenant_email',
+      },
+      {
+        unique: true,
+        fields: ['tenant_id', 'username'],
+        name: 'unique_tenant_username',
+      },
+    ],
+    hooks: {
+      beforeCreate: async (user) => {
+        if (user.password) {
+          user.password = await bcrypt.hash(user.password, 10);
+        }
+      },
+      beforeUpdate: async (user) => {
+        if (user.changed('password')) {
+          user.password = await bcrypt.hash(user.password, 10);
+        }
+      },
+    },
+  }
+);
 
 export default User;

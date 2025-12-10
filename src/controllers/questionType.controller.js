@@ -1,134 +1,157 @@
+/**
+ * QuestionType Controller - Sequelize for MariaDB
+ * Multi-tenant support
+ */
+
 import HTTPStatus from 'http-status';
-import QuestionType from '../models/questionType.model.js';
-import Question from '../models/question.model.js';
+import QuestionType from '../models/questiontype.model.js';
+import { tenantFilter, tenantData } from '../middlewares/tenant.middleware.js';
 
-export async function createQuestionType(req, res, next) {
+/**
+ * POST /api/question-types
+ * Create a question type
+ */
+export async function create(req, res, next) {
   try {
-    const questionType = new QuestionType({
+    const questionType = await QuestionType.create({
+      ...tenantData(req),
       qbs_qs_type_name: req.body.qbs_qs_type_name,
-      name: req.body.name,
-      marks: req.body.marks,
-      subject_id: req.body.subject_id
+      name: req.body.name || req.body.qbs_qs_type_name,
+      marks: req.body.marks || 1,
+      subject_id: req.body.subject_id,
     });
 
-    const savedQuestionType = await questionType.save();
     return res.status(HTTPStatus.CREATED).json({
-      message: 'Question type created successfully',
-      questionType: savedQuestionType
+      message: 'Question type created',
+      questionType,
     });
-  } catch (error) {
-    next(error);
+  } catch (err) {
+    err.status = HTTPStatus.BAD_REQUEST;
+    return next(err);
   }
 }
 
-export async function getQuestionTypes(req, res, next) {
+/**
+ * GET /api/question-types
+ * List question types
+ */
+export async function list(req, res, next) {
   try {
-    const { subject_id } = req.user.subject_id;
-    const query = subject_id ? { subject_id } : {};
-    
-    const questionTypes = await QuestionType.find(query)
-      .sort({ qbs_qs_type_id: 1 });
+    const { subjectId, limit = 100, skip = 0 } = req.query;
+
+    const where = { ...tenantFilter(req) };
+    if (subjectId) where.subject_id = subjectId;
+
+    const questionTypes = await QuestionType.findAll({
+      where,
+      order: [['qbs_qs_type_id', 'ASC']],
+      limit: parseInt(limit),
+      offset: parseInt(skip),
+    });
 
     return res.status(HTTPStatus.OK).json(questionTypes);
-  } catch (error) {
-    next(error);
+  } catch (err) {
+    err.status = HTTPStatus.BAD_REQUEST;
+    return next(err);
   }
 }
 
-export async function getQuestionTypeById(req, res, next) {
+/**
+ * GET /api/question-types/:id
+ * Get question type by ID
+ */
+export async function getById(req, res, next) {
   try {
-    const questionType = await QuestionType.findOne({ 
-      qbs_qs_type_id: parseInt(req.params.id )
+    const questionType = await QuestionType.findOne({
+      where: {
+        ...tenantFilter(req),
+        qbs_qs_type_id: req.params.id,
+      },
     });
 
     if (!questionType) {
-      return res.status(HTTPStatus.NOT_FOUND).json({
-        message: 'Question type not found'
-      });
+      return res.status(HTTPStatus.NOT_FOUND).json({ message: 'Question type not found' });
     }
 
     return res.status(HTTPStatus.OK).json(questionType);
-  } catch (error) {
-    next(error);
+  } catch (err) {
+    err.status = HTTPStatus.BAD_REQUEST;
+    return next(err);
   }
 }
 
-export async function getQuestionTypesByChapterId(req, res, next) {
+/**
+ * PUT /api/question-types/:id
+ * Update question type
+ */
+export async function update(req, res, next) {
   try {
-    const chapterId = Number(req.params.id);
-    
-    // Get all question types
-    const questionTypes = await QuestionType.find().sort({ qbs_qs_type_id: 1 });
-    
-    // Get question counts for each type
-    const typesWithCounts = await Promise.all(
-      questionTypes.map(async (type) => {
-        const questionCount = await Question.countDocuments({
-          qbs_chapter_id: chapterId,
-          qbs_qst_type_id: type.qbs_qs_type_id
-        });
-        
-        return {
-          qbs_qs_type_id: type.qbs_qs_type_id,
-          qbs_qs_type_name: type.qbs_qs_type_name,
-          name: type.name,
-          marks: type.marks,
-          subject_id: type.subject_id,
-          question_count: questionCount
-        };
-      })
-    );
-
-    return res.status(HTTPStatus.OK).json(typesWithCounts);
-  } catch (error) {
-    next(error);
-  }
-}
-
-export async function updateQuestionType(req, res, next) {
-  try {
-    const questionType = await QuestionType.findOneAndUpdate(
-      { qbs_qs_type_id: req.params.id },
-      {
-        qbs_qs_type_name: req.body.qbs_qs_type_name,
-        name: req.body.name,
-        marks: req.body.marks,
-        subject_id: req.body.subject_id
+    const questionType = await QuestionType.findOne({
+      where: {
+        ...tenantFilter(req),
+        qbs_qs_type_id: req.params.id,
       },
-      { new: true, runValidators: true }
-    );
+    });
 
     if (!questionType) {
-      return res.status(HTTPStatus.NOT_FOUND).json({
-        message: 'Question type not found'
-      });
+      return res.status(HTTPStatus.NOT_FOUND).json({ message: 'Question type not found' });
     }
 
+    const updateData = {};
+    if (req.body.qbs_qs_type_name) updateData.qbs_qs_type_name = req.body.qbs_qs_type_name;
+    if (req.body.name) updateData.name = req.body.name;
+    if (req.body.marks !== undefined) updateData.marks = req.body.marks;
+    if (req.body.subject_id) updateData.subject_id = req.body.subject_id;
+
+    await questionType.update(updateData);
+
     return res.status(HTTPStatus.OK).json({
-      message: 'Question type updated successfully',
-      questionType
+      message: 'Question type updated',
+      questionType,
     });
-  } catch (error) {
-    next(error);
+  } catch (err) {
+    err.status = HTTPStatus.BAD_REQUEST;
+    return next(err);
   }
 }
 
+/**
+ * DELETE /api/question-types/:id
+ * Delete question type
+ */
 export async function deleteQuestionType(req, res, next) {
   try {
-    const questionType = await QuestionType.findOneAndDelete({
-      qbs_qs_type_id: req.params.id
+    const deleted = await QuestionType.destroy({
+      where: {
+        ...tenantFilter(req),
+        qbs_qs_type_id: req.params.id,
+      },
     });
 
-    if (!questionType) {
-      return res.status(HTTPStatus.NOT_FOUND).json({
-        message: 'Question type not found'
-      });
+    if (!deleted) {
+      return res.status(HTTPStatus.NOT_FOUND).json({ message: 'Question type not found' });
     }
 
-    return res.status(HTTPStatus.OK).json({
-      message: 'Question type deleted successfully'
+    return res.status(HTTPStatus.OK).json({ message: 'Question type deleted' });
+  } catch (err) {
+    err.status = HTTPStatus.BAD_REQUEST;
+    return next(err);
+  }
+}
+
+/**
+ * GET /api/question-types/count
+ * Get question type count
+ */
+export async function getCount(req, res, next) {
+  try {
+    const count = await QuestionType.count({
+      where: tenantFilter(req),
     });
-  } catch (error) {
-    next(error);
+
+    return res.status(HTTPStatus.OK).json({ count });
+  } catch (err) {
+    err.status = HTTPStatus.BAD_REQUEST;
+    return next(err);
   }
 }

@@ -1,5 +1,6 @@
 /**
  * API Routes
+ * Multi-tenant support
  */
 
 import { Router } from 'express';
@@ -15,26 +16,34 @@ import QuestionRoutes from './question.routes.js';
 import QuestionTypeRoutes from './questionType.routes.js';
 import SeedRoutes from './seed.routes.js';
 import UserRoutes from './user.routes.js';
+import AuthRoutes from './auth.routes.js';
 
 import APIError from '../services/error.js';
 
 // Middlewares
 import logErrorService from '../services/log.js';
+import { tenantContext } from '../middlewares/tenant.middleware.js';
 
 const routes = new Router();
 
 const isDev = process.env.NODE_ENV === 'development';
 const isTest = process.env.NODE_ENV === 'test';
 
-routes.use('/blueprints', BluePrintRoutes);
-routes.use('/chapters', ChapterRoutes);
-routes.use('/dashboard', DashboardRoutes);
-routes.use('/exams', ExamRoutes);
-routes.use('/patterns', PatternRoutes);
-routes.use('/posts', PostRoutes);
-routes.use('/questions', QuestionRoutes);
-routes.use('/questiontypes', QuestionTypeRoutes);
+// Auth routes (public, no tenant context required for login/register)
+routes.use('/auth', AuthRoutes);
+
+// User routes (login/signup - public)
 routes.use('/users', UserRoutes);
+
+// Protected routes with tenant context
+routes.use('/blueprints', tenantContext, BluePrintRoutes);
+routes.use('/chapters', tenantContext, ChapterRoutes);
+routes.use('/dashboard', tenantContext, DashboardRoutes);
+routes.use('/exams', tenantContext, ExamRoutes);
+routes.use('/patterns', tenantContext, PatternRoutes);
+routes.use('/posts', tenantContext, PostRoutes);
+routes.use('/questions', tenantContext, QuestionRoutes);
+routes.use('/questiontypes', tenantContext, QuestionTypeRoutes);
 
 if (isDev || isTest) {
   routes.use('/seeds', SeedRoutes);
