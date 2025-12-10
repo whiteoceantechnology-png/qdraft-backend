@@ -1,181 +1,175 @@
-import HTTPStatus from 'http-status';
+/**
+ * Dashboard Controller - Sequelize for MariaDB
+ */
 
+import HTTPStatus from 'http-status';
+import { Op, fn, col, literal } from 'sequelize';
 import Question from '../models/question.model.js';
 import Blueprint from '../models/blueprint.model.js';
 import Exam from '../models/exam.model.js';
 import Pattern from '../models/pattern.model.js';
+import QuestionType from '../models/questiontype.model.js';
+import sequelize from '../config/database.js';
 
 /**
  * Get dashboard statistics
- * @param {Object} req - Express request object
- * @param {Object} res - Express response object
  */
 export async function getDashboardStats(req, res, next) {
-    try {
-        const userId = req.user?.user_id;
+  try {
+    const userId = req.user?.user_id;
 
-        if (!userId) {
-            return res.status(HTTPStatus.UNAUTHORIZED).json({ message: 'Unauthorized' });
-        }
-
-        // Count QBM exams created by user
-        const qbmCount = await Exam.countDocuments({
-            created_by: userId
-        }).exec();
-
-        // Count patterns created by user
-        const chapterCount = await Pattern.countDocuments({
-            qbs_ptn_added_by: userId
-        }).exec();
-
-        // Count questions created by user
-        const questionCount = await Question.countDocuments({
-            qbs_question_added_by: userId
-        }).exec();
-
-        const userBased = {
-            qbm: qbmCount,
-            chapter: chapterCount,
-            questions: questionCount
-        };
-
-        // Get question counts by type (still filtered by user)
-        const questionCountsParsed = await Question.aggregate([
-            { $match: { qbs_question_added_by: userId } },
-            {
-                $lookup: {
-                    from: 'questiontypes',
-                    localField: 'qbs_qst_type_id',
-                    foreignField: 'qbs_qs_type_id',
-                    as: 'questionType'
-                }
-            },
-            { $unwind: '$questionType' },
-            {
-                $group: {
-                    _id: {
-                        typeId: '$qbs_qs_type_id',
-                        typeName: '$questionType.qbs_qs_type_name'
-                    },
-                    question_count: { $sum: 1 }
-                }
-            },
-            {
-                $project: {
-                    _id: 0,
-                    qbs_qs_type_name: '$_id.typeName',
-                    question_count: { $toString: '$question_count' }
-                }
-            },
-            { $sort: { qbs_qs_type_name: 1 } }
-        ]);
-
-        res.status(HTTPStatus.OK).json({
-            userBased,
-            questionCountsParsed
-        });
-    } catch (error) {
-        console.error('Dashboard stats error:', error);
-        next(error);
+    if (!userId) {
+      return res.status(HTTPStatus.UNAUTHORIZED).json({ message: 'Unauthorized' });
     }
-};
 
-// Build last N months labels and boundaries (oldest -> newest)
+    // Count QBM exams created by user
+    const qbmCount = await Exam.count({ where: { created_by: userId } });
+
+    // Count patterns created by user
+    const chapterCount = await Pattern.count({ where: { qbs_ptn_added_by: userId } });
+
+    // Count questions created by user
+    const questionCount = await Question.count({ where: { qbs_question_added_by: userId } });
+
+    const userBased = {
+      qbm: qbmCount,
+      chapter: chapterCount,
+      questions: questionCount
+    };
+
+    // Get question counts by type (filtered by user)
+    const questionCounts = await Question.findAll({
+      where: { qbs_question_added_by: userId },
+      attributes: [
+        'qbs_qst_type_id',
+        [fn('COUNT', col('qbs_question_id')), 'question_count']
+      ],
+      group: ['qbs_qst_type_id'],
+      raw: true
+    });
+
+    // Get question type names
+    const typeIds = questionCounts.map(q => q.qbs_qst_type_id).filter(Boolean);
+    const types = typeIds.length ? await QuestionType.findAll({
+      where: { qbs_qs_type_id: { [Op.in]: typeIds } },
+      attributes: ['qbs_qs_type_id', 'qbs_qs_type_name'],
+      raw: true
+    }) : [];
+
+    const typeMap = {};
+    types.forEach(t => { typeMap[t.qbs_qs_type_id] = t.qbs_qs_type_name; });
+
+    const questionCountsParsed = questionCounts.map(q => ({
+      qbs_qs_type_name: typeMap[q.qbs_qst_type_id] || `type_${q.qbs_qst_type_id}`,
+      question_count: String(q.question_count)
+    })).sort((a, b) => a.qbs_qs_type_name.localeCompare(b.qbs_qs_type_name));
+
+    res.status(HTTPStatus.OK).json({
+      userBased,
+      questionCountsParsed
+    });
+  } catch (error) {
+    next(error);
+  }
+}
+
+// Build last N months labels and boundaries
 function buildLastNMonths(n = 12, endDate = new Date()) {
-    const months = [];
-    // clone and set to first day of the month for endDate
-    const end = new Date(endDate.getFullYear(), endDate.getMonth(), 1);
-    for (let i = n - 1; i >= 0; i--) {
-        const d = new Date(end.getFullYear(), end.getMonth() - i, 1);
-        const label = d.toLocaleString('en-US', { month: 'long', year: 'numeric' });
-        const start = new Date(d.getFullYear(), d.getMonth(), 1, 0, 0, 0, 0);
-        const next = new Date(d.getFullYear(), d.getMonth() + 1, 1, 0, 0, 0, 0);
-        months.push({ label, year: d.getFullYear(), month: d.getMonth() + 1, start, end: new Date(next - 1) });
-    }
-    return months;
+  const months = [];
+  const end = new Date(endDate.getFullYear(), endDate.getMonth(), 1);
+  for (let i = n - 1; i >= 0; i--) {
+    const d = new Date(end.getFullYear(), end.getMonth() - i, 1);
+    const label = d.toLocaleString('en-US', { month: 'long', year: 'numeric' });
+    const start = new Date(d.getFullYear(), d.getMonth(), 1, 0, 0, 0, 0);
+    const next = new Date(d.getFullYear(), d.getMonth() + 1, 1, 0, 0, 0, 0);
+    months.push({ label, year: d.getFullYear(), month: d.getMonth() + 1, start, end: new Date(next - 1) });
+  }
+  return months;
 }
 
 /**
- * Get monthly dashboard statistics (blueprints, exams, pieData per dept/sub)
+ * Get monthly dashboard statistics
  */
 export async function getDashboardMonthlyStats(req, res, next) {
-    try {
-        const months = buildLastNMonths(12);
-        const rangeStart = months[0].start;
-        const rangeEnd = months[months.length - 1].end;
+  try {
+    const months = buildLastNMonths(12);
+    const rangeStart = months[0].start;
+    const rangeEnd = months[months.length - 1].end;
 
-        // Blueprints aggregation by month
-        const blpAgg = await Blueprint.aggregate([
-            { $match: { qbs_blp_added_at: { $gte: rangeStart, $lte: rangeEnd } } },
-            {
-                $group: {
-                    _id: { year: { $year: '$qbs_blp_added_at' }, month: { $month: '$qbs_blp_added_at' } },
-                    count: { $sum: 1 }
-                }
-            }
-        ]).exec();
+    // Blueprints by month
+    const blpResults = await Blueprint.findAll({
+      where: {
+        qbs_blp_added_at: { [Op.between]: [rangeStart, rangeEnd] }
+      },
+      attributes: [
+        [fn('YEAR', col('qbs_blp_added_at')), 'year'],
+        [fn('MONTH', col('qbs_blp_added_at')), 'month'],
+        [fn('COUNT', col('qbs_blp_id')), 'count']
+      ],
+      group: [fn('YEAR', col('qbs_blp_added_at')), fn('MONTH', col('qbs_blp_added_at'))],
+      raw: true
+    });
 
-        const bluePrintStat = months.map(m => {
-            const found = blpAgg.find(a => a._id.year === m.year && a._id.month === m.month);
-            return { month: m.label, count: found ? found.count : 0 };
-        });
+    const bluePrintStat = months.map(m => {
+      const found = blpResults.find(a => a.year === m.year && a.month === m.month);
+      return { month: m.label, count: found ? Number(found.count) : 0 };
+    });
 
-        // Exams aggregation by month
-        const exAgg = await Exam.aggregate([
-            { $match: { qbs_exam_added: { $gte: rangeStart, $lte: rangeEnd } } },
-            {
-                $group: {
-                    _id: { year: { $year: '$qbs_exam_added' }, month: { $month: '$qbs_exam_added' } },
-                    count: { $sum: 1 }
-                }
-            }
-        ]).exec();
+    // Exams by month
+    const exResults = await Exam.findAll({
+      where: {
+        qbs_exam_added: { [Op.between]: [rangeStart, rangeEnd] }
+      },
+      attributes: [
+        [fn('YEAR', col('qbs_exam_added')), 'year'],
+        [fn('MONTH', col('qbs_exam_added')), 'month'],
+        [fn('COUNT', col('qbs_exam_id')), 'count']
+      ],
+      group: [fn('YEAR', col('qbs_exam_added')), fn('MONTH', col('qbs_exam_added'))],
+      raw: true
+    });
 
-        const examStat = months.map(m => {
-            const found = exAgg.find(a => a._id.year === m.year && a._id.month === m.month);
-            return { month: m.label, count: found ? found.count : 0 };
-        });
+    const examStat = months.map(m => {
+      const found = exResults.find(a => a.year === m.year && a.month === m.month);
+      return { month: m.label, count: found ? Number(found.count) : 0 };
+    });
 
-        // Pie data: questions counts grouped by dept/sub per month
-        // Aggregate questions per dept/sub per month
-        const qAgg = await Question.aggregate([
-            { $match: { qbs_question_added: { $gte: rangeStart, $lte: rangeEnd } } },
-            {
-                $group: {
-                    _id: {
-                        dept: '$qbs_dept_id',
-                        sub: '$qbs_sub_id',
-                        year: { $year: '$qbs_question_added' },
-                        month: { $month: '$qbs_question_added' }
-                    },
-                    count: { $sum: 1 }
-                }
-            },
-            {
-                $group: {
-                    _id: { dept: '$_id.dept', sub: '$_id.sub' },
-                    monthly: {
-                        $push: {
-                            year: '$_id.year',
-                            month: '$_id.month',
-                            count: '$count'
-                        }
-                    }
-                }
-            }
-        ]).exec();
+    // Questions by dept/sub per month
+    const qResults = await Question.findAll({
+      where: {
+        qbs_question_added: { [Op.between]: [rangeStart, rangeEnd] }
+      },
+      attributes: [
+        'qbs_dept_id',
+        'qbs_sub_id',
+        [fn('YEAR', col('qbs_question_added')), 'year'],
+        [fn('MONTH', col('qbs_question_added')), 'month'],
+        [fn('COUNT', col('qbs_question_id')), 'count']
+      ],
+      group: ['qbs_dept_id', 'qbs_sub_id', fn('YEAR', col('qbs_question_added')), fn('MONTH', col('qbs_question_added'))],
+      raw: true
+    });
 
-        const pieData = qAgg.map(g => {
-            const monthly_counts = months.map(m => {
-                const found = g.monthly.find(mc => mc.year === m.year && mc.month === m.month);
-                return { month: m.label, count: found ? found.count : 0 };
-            });
-            return { qbs_dept_id: String(g._id.dept), qbs_sub_id: g._id.sub, monthly_counts };
-        });
+    // Group by dept/sub
+    const grouped = {};
+    qResults.forEach(r => {
+      const key = `${r.qbs_dept_id}_${r.qbs_sub_id}`;
+      if (!grouped[key]) {
+        grouped[key] = { dept: r.qbs_dept_id, sub: r.qbs_sub_id, monthly: [] };
+      }
+      grouped[key].monthly.push({ year: r.year, month: r.month, count: Number(r.count) });
+    });
 
-        res.status(HTTPStatus.OK).json({ bluePrintStat, examStat, pieData });
-    } catch (err) {
-        next(err);
-    }
+    const pieData = Object.values(grouped).map(g => {
+      const monthly_counts = months.map(m => {
+        const found = g.monthly.find(mc => mc.year === m.year && mc.month === m.month);
+        return { month: m.label, count: found ? found.count : 0 };
+      });
+      return { qbs_dept_id: String(g.dept), qbs_sub_id: g.sub, monthly_counts };
+    });
+
+    res.status(HTTPStatus.OK).json({ bluePrintStat, examStat, pieData });
+  } catch (err) {
+    next(err);
+  }
 }
-

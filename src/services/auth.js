@@ -1,3 +1,7 @@
+/**
+ * Authentication Service - Sequelize for MariaDB
+ */
+
 import passport from 'passport';
 import LocalStrategy from 'passport-local';
 import { Strategy as JWTStrategy, ExtractJwt } from 'passport-jwt';
@@ -10,11 +14,11 @@ import constants from '../config/constants.js';
  */
 const localOpts = { usernameField: 'username' };
 
-const localLogin = await new LocalStrategy(
+const localLogin = new LocalStrategy(
   localOpts,
   async (username, password, done) => {
     try {
-      const user = await User.findOne({ username });
+      const user = await User.findOne({ where: { username } });
       if (!user) {
         return done(null, false);
       } else if (!user.authenticateUser(password)) {
@@ -31,15 +35,13 @@ const localLogin = await new LocalStrategy(
  * JWT Strategy Auth
  */
 const jwtOpts = {
-  // Telling Passport to check authorization headers for JWT
   jwtFromRequest: ExtractJwt.fromAuthHeaderWithScheme('JWT'),
-  // Telling Passport where to find the secret
   secretOrKey: constants.JWT_SECRET,
 };
 
 const jwtLogin = new JWTStrategy(jwtOpts, async (payload, done) => {
   try {
-    const user = await User.findOne({ user_id: payload.user_id });
+    const user = await User.findOne({ where: { user_id: payload.user_id } });
 
     if (!user) {
       return done(null, false);

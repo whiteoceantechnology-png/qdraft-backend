@@ -1,5 +1,5 @@
 /**
- * Post Controller
+ * Post Controller - Sequelize/MariaDB
  */
 
 import Joi from 'joi';
@@ -8,6 +8,7 @@ import contants from '../config/constants.js';
 
 import { filteredBody } from '../utils/filteredBody.js';
 import User from '../models/user.model.js';
+import Post from '../models/post.model.js';
 
 export const validation = {
   create: {
@@ -69,16 +70,6 @@ export const validation = {
  *      _id: '123312',
  *      username: 'Jon'
  *    }
- *  },
- *  {
- *    _id: '12234',
- *    title: 'New title 2',
- *    text: 'New text 2',
- *    createdAt: '2017-05-03',
- *    author: {
- *      _id: '123312234',
- *      username: 'Jon'
- *    }
  *  }
  * ]
  *
@@ -89,12 +80,21 @@ export const validation = {
  */
 export async function getList(req, res, next) {
   try {
-    const promise = await Promise.all([
-      User.findById(req.user._id),
-      Post.list({ skip: req.query.skip, limit: req.query.limit }),
-    ]);
+    const skip = parseInt(req.query.skip) || 0;
+    const limit = parseInt(req.query.limit) || 10;
 
-    return res.status(HTTPStatus.OK).json({});
+    const posts = await Post.findAll({
+      include: [{
+        model: User,
+        as: 'author',
+        attributes: ['user_id', 'username', 'name']
+      }],
+      order: [['createdAt', 'DESC']],
+      offset: skip,
+      limit: limit
+    });
+
+    return res.status(HTTPStatus.OK).json(posts);
   } catch (err) {
     err.status = HTTPStatus.BAD_REQUEST;
     return next(err);
@@ -150,13 +150,26 @@ export async function getList(req, res, next) {
  */
 export async function getById(req, res, next) {
   try {
-    const promise = await Promise.all([
-      User.findById(req.user._id),
-      Post.findById(req.params.id).populate('author'),
-    ]);
-    const favorite = promise[0]._favorites.isPostIsFavorite(req.params.id);
+    const post = await Post.findOne({
+      where: { post_id: req.params.id },
+      include: [{
+        model: User,
+        as: 'author',
+        attributes: ['user_id', 'username', 'name']
+      }]
+    });
+
+    if (!post) {
+      return res.sendStatus(HTTPStatus.NOT_FOUND);
+    }
+
+    // Check if user has favorited this post
+    const user = await User.findOne({ where: { user_id: req.user.user_id } });
+    const favorites = user?.favorites || [];
+    const favorite = favorites.includes(parseInt(req.params.id));
+
     return res.status(HTTPStatus.OK).json({
-      ...promise[1].toJSON(),
+      ...post.toJSON(),
       favorite,
     });
   } catch (err) {
@@ -209,9 +222,12 @@ export async function getById(req, res, next) {
 export async function create(req, res, next) {
   const body = filteredBody(req.body, contants.WHITELIST.posts.create);
   try {
-    return res
-      .status(HTTPStatus.CREATED)
-      .json(await Post.createPost(body, req.user._id));
+    const post = await Post.create({
+      ...body,
+      author_id: req.user.user_id
+    });
+
+    return res.status(HTTPStatus.CREATED).json(post);
   } catch (err) {
     err.status = HTTPStatus.BAD_REQUEST;
     return next(err);
@@ -251,12 +267,17 @@ export async function create(req, res, next) {
  */
 export async function deletePost(req, res, next) {
   try {
-    const post = await Post.findById(req.params.id);
+    const post = await Post.findOne({ where: { post_id: req.params.id } });
 
-    if (post.author.toString() !== req.user._id.toString()) {
+    if (!post) {
+      return res.sendStatus(HTTPStatus.NOT_FOUND);
+    }
+
+    if (post.author_id !== req.user.user_id) {
       return res.sendStatus(HTTPStatus.UNAUTHORIZED);
     }
-    await post.remove();
+
+    await post.destroy();
     return res.sendStatus(HTTPStatus.OK);
   } catch (err) {
     err.status = HTTPStatus.BAD_REQUEST;
@@ -312,17 +333,18 @@ export async function deletePost(req, res, next) {
 export async function updatePost(req, res, next) {
   const body = filteredBody(req.body, contants.WHITELIST.posts.update);
   try {
-    const post = await Post.findById(req.params.id);
+    const post = await Post.findOne({ where: { post_id: req.params.id } });
 
-    if (post.author.toString() !== req.user._id.toString()) {
+    if (!post) {
+      return res.sendStatus(HTTPStatus.NOT_FOUND);
+    }
+
+    if (post.author_id !== req.user.user_id) {
       return res.sendStatus(HTTPStatus.UNAUTHORIZED);
     }
 
-    Object.keys(body).forEach(key => {
-      post[key] = body[key];
-    });
-
-    return res.status(HTTPStatus.OK).json(await post.save());
+    await post.update(body);
+    return res.status(HTTPStatus.OK).json(post);
   } catch (err) {
     err.status = HTTPStatus.BAD_REQUEST;
     return next(err);
@@ -359,8 +381,20 @@ export async function updatePost(req, res, next) {
  */
 export async function favoritePost(req, res, next) {
   try {
-    const user = await User.findById(req.user._id);
-    await user._favorites.posts(req.params.id);
+    const user = await User.findOne({ where: { user_id: req.user.user_id } });
+    const postId = parseInt(req.params.id);
+    
+    // Toggle favorite - add if not exists, remove if exists
+    let favorites = user.favorites || [];
+    const index = favorites.indexOf(postId);
+    
+    if (index > -1) {
+      favorites.splice(index, 1);
+    } else {
+      favorites.push(postId);
+    }
+    
+    await user.update({ favorites });
     return res.sendStatus(HTTPStatus.OK);
   } catch (err) {
     err.status = HTTPStatus.BAD_REQUEST;

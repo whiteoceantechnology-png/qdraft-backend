@@ -1,124 +1,122 @@
-/* eslint-disable import/no-mutable-exports */
-
-import mongoose, { Schema } from 'mongoose';
-import uniqueValidator from 'mongoose-unique-validator';
-import slug from 'slug';
-
-const PostSchema = new Schema(
-  {
-    title: {
-      type: String,
-      trim: true,
-      required: [true, 'Title is required!'],
-      minlength: [3, 'Title must be longer!'],
-      unique: true,
-    },
-    text: {
-      type: String,
-      required: [true, 'Some text are required!'],
-    },
-    slug: {
-      type: String,
-      trim: true,
-      lowercase: true,
-      unique: true,
-    },
-    author: {
-      type: Schema.Types.ObjectId,
-      ref: 'User',
-      required: [true, 'Author is required!'],
-    },
-    favoriteCount: {
-      type: Number,
-      default: 0,
-    },
-  },
-  { timestamps: true },
-);
-
-PostSchema.plugin(uniqueValidator, {
-  message: '{VALUE} already taken!',
-});
-
 /**
- * Slugify the text on validation hook
+ * Post Model - Sequelize for MariaDB
  */
-PostSchema.pre('validate', function(next) {
-  this.slugify();
 
-  next();
-});
+import { DataTypes, Model } from 'sequelize';
+import slugify from 'slug';
+import sequelize from '../config/database.js';
 
-PostSchema.statics = {
+class Post extends Model {
+  /**
+   * Slug the title
+   */
+  slugify() {
+    this.slug = slugify(this.title);
+  }
+
+  /**
+   * Parse the post for response
+   */
+  toJSON() {
+    return {
+      id: this.id,
+      title: this.title,
+      text: this.text,
+      slug: this.slug,
+      author: this.author,
+      favoriteCount: this.favoriteCount,
+      createdAt: this.createdAt,
+      updatedAt: this.updatedAt,
+    };
+  }
+
   /**
    * Create a post
-   *
-   * @public
-   * @param {Object} args - Object contains title and text
-   * @param {String} authorId - the author id
-   * @returns {Post} Post Object - new post create
    */
-  createPost(args, authorId) {
+  static async createPost(args, authorId) {
     return this.create({
       ...args,
       author: authorId,
     });
-  },
+  }
 
   /**
-   * If you call list() with zero arguments, the destructuring fails,
-   * because you can’t match an object pattern against undefined.
-   * That can be fixed via a default value. In the following code,
-   * the object pattern is matched against {} if there isn’t at least one argument.
+   * List posts with pagination
    */
-  list({ skip = 0, limit = 10 } = {}) {
-    return this.find()
-      .sort({ createdAt: -1 })
-      .skip(skip)
-      .limit(limit)
-      .populate('author');
-  },
+  static async list({ skip = 0, limit = 10 } = {}) {
+    return this.findAll({
+      order: [['createdAt', 'DESC']],
+      offset: skip,
+      limit: limit,
+    });
+  }
 
-  incFavoriteCount(postId) {
-    return this.findByIdAndUpdate(postId, { $inc: { favoriteCount: 1 } });
-  },
-
-  decFavoriteCount(postId) {
-    return this.findByIdAndUpdate(postId, { $inc: { favoriteCount: -1 } });
-  },
-};
-
-PostSchema.methods = {
   /**
-   * Slug the title and add this to the slug prop
+   * Increment favorite count
    */
-  slugify() {
-    this.slug = slug(this.title);
-  },
+  static async incFavoriteCount(postId) {
+    return this.increment('favoriteCount', { where: { id: postId } });
+  }
+
   /**
-   * Parse the post in format we want to send.
-   *
-   * @public
-   * @returns {Post} Post Object
+   * Decrement favorite count
    */
-  toJSON() {
-    return {
-      _id: this._id,
-      title: this.title,
-      text: this.text,
-      author: this.author,
-      createdAt: this.createdAt,
-      favoriteCount: this.favoriteCount,
-    };
-  },
-};
-
-let Post;
-
-try {
-  Post = mongoose.model('Post');
-} catch (e) {
-  Post = mongoose.model('Post', PostSchema);
+  static async decFavoriteCount(postId) {
+    return this.decrement('favoriteCount', { where: { id: postId } });
+  }
 }
+
+Post.init(
+  {
+    id: {
+      type: DataTypes.INTEGER,
+      primaryKey: true,
+      autoIncrement: true,
+    },
+    title: {
+      type: DataTypes.STRING(255),
+      allowNull: false,
+      unique: true,
+      validate: {
+        len: {
+          args: [3, 255],
+          msg: 'Title must be at least 3 characters',
+        },
+      },
+    },
+    text: {
+      type: DataTypes.TEXT,
+      allowNull: false,
+    },
+    slug: {
+      type: DataTypes.STRING(255),
+      allowNull: true,
+      unique: true,
+    },
+    author: {
+      type: DataTypes.INTEGER,
+      allowNull: false,
+    },
+    favoriteCount: {
+      type: DataTypes.INTEGER,
+      defaultValue: 0,
+    },
+  },
+  {
+    sequelize,
+    modelName: 'Post',
+    tableName: 'posts',
+    timestamps: true,
+    createdAt: 'createdAt',
+    updatedAt: 'updatedAt',
+    hooks: {
+      beforeValidate: (post) => {
+        if (post.title) {
+          post.slug = slugify(post.title);
+        }
+      },
+    },
+  }
+);
 
 export default Post;

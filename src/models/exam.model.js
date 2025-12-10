@@ -1,67 +1,102 @@
-import mongoose from 'mongoose';
+/**
+ * Exam Model - Sequelize for MariaDB
+ */
 
-const { Schema } = mongoose;
+import { DataTypes, Model } from 'sequelize';
+import sequelize from '../config/database.js';
 
-const ExamPatternSchema = new Schema(
+class Exam extends Model {}
+
+Exam.init(
   {
-    qbs_ptn_id: { type: Number, required: true, ref: 'Pattern' },
-    qbs_ptn_name: { type: String },
-    // optional weight or marks allocation for this pattern within the exam
-    weight: { type: Number, default: 0 }
+    qbs_exam_id: {
+      type: DataTypes.INTEGER,
+      primaryKey: true,
+      autoIncrement: true,
+    },
+    qbs_exam_name: {
+      type: DataTypes.STRING(255),
+      allowNull: false,
+    },
+    qbs_exam_added: {
+      type: DataTypes.DATE,
+      defaultValue: DataTypes.NOW,
+    },
+    trial_user_id: {
+      type: DataTypes.INTEGER,
+      allowNull: true,
+    },
+    qbs_chapter_id: {
+      type: DataTypes.INTEGER,
+      allowNull: true,
+    },
+    // UI and form related fields stored as JSON
+    showFields: {
+      type: DataTypes.JSON,
+      allowNull: true,
+      defaultValue: {},
+    },
+    formData: {
+      type: DataTypes.JSON,
+      allowNull: true,
+      defaultValue: {},
+    },
+    headerContent: {
+      type: DataTypes.TEXT('long'),
+      allowNull: true,
+      defaultValue: '',
+    },
+    footerContent: {
+      type: DataTypes.TEXT('long'),
+      allowNull: true,
+      defaultValue: '',
+    },
+    editorContents: {
+      type: DataTypes.JSON,
+      allowNull: true,
+      defaultValue: {},
+    },
+    selectedQueType: {
+      type: DataTypes.JSON,
+      allowNull: true,
+      defaultValue: [],
+    },
+    // Patterns and questions stored as JSON arrays
+    patterns: {
+      type: DataTypes.JSON,
+      allowNull: true,
+      defaultValue: [],
+    },
+    questions: {
+      type: DataTypes.JSON,
+      allowNull: true,
+      defaultValue: [],
+    },
+    meta: {
+      type: DataTypes.JSON,
+      allowNull: true,
+      defaultValue: {},
+    },
+    created_by: {
+      type: DataTypes.INTEGER,
+      allowNull: false,
+    },
+    updated_by: {
+      type: DataTypes.INTEGER,
+      allowNull: false,
+    },
   },
-  { _id: false, versionKey: false }
-);
-
-const ExamQuestionSchema = new Schema(
   {
-    qbs_qst_id: { type: Number, required: true, ref: 'Question'},
-    qbs_qst_type: { type: Number },
-    marks: { type: Number, default: 0 }
-  },
-  { _id: false, versionKey: false }
-);
-
-const ExamSchema = new Schema(
-  {
-    qbs_exam_id: { type: Number, unique: true, index: true,primaryKey:true },
-    qbs_exam_name: { type: String, required: true, trim: true },
-    qbs_exam_added: { type: Date, default: Date.now },
-    trial_user_id: { type: Number, default: null, ref: 'User' },
-    qbs_chapter_id: { type: Number, ref: 'Chapter' },
-    // UI and form related fields
-    showFields: { type: Schema.Types.Mixed, default: {} },
-    formData: { type: Schema.Types.Mixed, default: {} },
-    headerContent: { type: String, default: '' },
-    footerContent: { type: String, default: '' },
-    editorContents: { type: Schema.Types.Mixed, default: {} },
-    selectedQueType: { type: [Number], default: [] },
-    // raw question data as provided in payload (keeps original question objects)
-    // queData: { type: [Schema.Types.Mixed], default: [] },
-    patterns: { type: [ExamPatternSchema], default: [] },
-    questions: { type: [ExamQuestionSchema], default: [] },
-    meta: { type: Schema.Types.Mixed, default: {} },
-    created_by: { type: Number, required: true , ref: 'User'},
-    updated_by: { type: Number, required: true , ref: 'User' },
-  },
-  {
+    sequelize,
+    modelName: 'Exam',
+    tableName: 'exams',
     timestamps: false,
-    versionKey: false,
-    collection: 'exams',
+    indexes: [
+      { fields: ['qbs_chapter_id'] },
+      { fields: ['trial_user_id'] },
+      { fields: ['created_by'] },
+    ],
   }
 );
 
-// Auto-increment qbs_exam_id on create
-ExamSchema.pre('save', async function (next) {
-  try {
-    if (this.isNew && (this.qbs_exam_id == null)) {
-      const last = await mongoose.models.Exam.findOne().sort('-qbs_exam_id').select('qbs_exam_id').lean().exec();
-      this.qbs_exam_id = last && last.qbs_exam_id ? last.qbs_exam_id + 1 : 1;
-    }
-    next();
-  } catch (err) {
-    next(err);
-  }
-});
-
-const Exam = mongoose.models.Exam || mongoose.model('Exam', ExamSchema);
 export default Exam;

@@ -1,18 +1,15 @@
+/**
+ * Pattern Controller - Sequelize for MariaDB
+ */
+
 import HTTPStatus from 'http-status';
+import { Op } from 'sequelize';
 import Pattern from '../models/pattern.model.js';
 import Chapter from '../models/chapter.model.js';
 import Question from '../models/question.model.js';
 
 /**
- * Create a pattern (blueprint-like question selection)
- * Expected body shape:
- * {
- *   sub_notes: { "1": ["Multiple Choice Question","1 x 1 = 1"], ... },
- *   qbs_ptn_name: 'demo',
- *   qbs_chapter_id: 3976,
- *   total_mark: 14,
- *   qbs_ptn_questions: ["420815, 1", "314047, 6", ...]
- * }
+ * Create a pattern
  */
 export async function createPattern(req, res, next) {
   try {
@@ -25,15 +22,15 @@ export async function createPattern(req, res, next) {
       throw err;
     }
 
-    // validate chapter exists
-    const chapter = await Chapter.findOne({ qbs_chapter_id }).lean().exec();
+    // Validate chapter exists
+    const chapter = await Chapter.findOne({ where: { qbs_chapter_id } });
     if (!chapter) {
       const err = new Error(`Chapter not found: ${qbs_chapter_id}`);
       err.status = HTTPStatus.BAD_REQUEST;
       throw err;
     }
 
-    // parse questions array
+    // Parse questions array
     const parsedQuestions = (Array.isArray(qbs_ptn_questions) ? qbs_ptn_questions : []).map(item => {
       if (typeof item === 'string') {
         const parts = item.split(',').map(s => s.trim());
@@ -45,7 +42,7 @@ export async function createPattern(req, res, next) {
       return null;
     }).filter(Boolean);
 
-    const pattern = new Pattern({
+    const pattern = await Pattern.create({
       qbs_ptn_name,
       qbs_chapter_id,
       total_mark: Number(total_mark) || 0,
@@ -54,8 +51,7 @@ export async function createPattern(req, res, next) {
       qbs_ptn_added_by: req.user?.user_id || 0
     });
 
-    const saved = await pattern.save();
-    return res.status(HTTPStatus.CREATED).json({ message: 'Pattern created', pattern: saved });
+    return res.status(HTTPStatus.CREATED).json({ message: 'Pattern created', pattern });
   } catch (err) {
     return next(err);
   }
@@ -65,6 +61,9 @@ export async function updatePattern(req, res, next) {
   try {
     const id = parseInt(req.params.id);
     const body = req.body || {};
+
+    const pattern = await Pattern.findOne({ where: { qbs_ptn_id: id } });
+    if (!pattern) return res.status(HTTPStatus.NOT_FOUND).json({ message: 'Pattern not found' });
 
     const update = {};
     if (body.qbs_ptn_name) update.qbs_ptn_name = body.qbs_ptn_name;
@@ -84,8 +83,7 @@ export async function updatePattern(req, res, next) {
       }).filter(Boolean);
     }
 
-    const pattern = await Pattern.findOneAndUpdate({ qbs_ptn_id: id }, update, { new: true, runValidators: true }).exec();
-    if (!pattern) return res.status(HTTPStatus.NOT_FOUND).json({ message: 'Pattern not found' });
+    await pattern.update(update);
     return res.status(HTTPStatus.OK).json({ message: 'Pattern updated', pattern });
   } catch (err) {
     return next(err);
@@ -95,19 +93,23 @@ export async function updatePattern(req, res, next) {
 export async function getPattern(req, res, next) {
   try {
     const id = parseInt(req.params.id);
-    const pattern = await Pattern.findOne({ qbs_ptn_id: id }).lean().exec();
-    if (pattern && Array.isArray(pattern.qbs_ptn_questions)) {
-      const questionIds = pattern.qbs_ptn_questions.map(q => q.qbs_qst_id);
-      console.log('Fetching questions for IDs:', questionIds);
-      const questions = await Question.find({ qbs_question_id: { $in: questionIds } }).select('-_id').lean().exec();
-      console.log('Fetched questions:', questions.length);
-      pattern.qbs_ptn_questions = pattern.qbs_ptn_questions.map(q => ({
-        ...q,
-        ...(questions.find(question => question.qbs_question_id === q.qbs_qst_id)) || null
-      }));
-    }
+    const pattern = await Pattern.findOne({ where: { qbs_ptn_id: id } });
+    
     if (!pattern) return res.status(HTTPStatus.NOT_FOUND).json({ message: 'Pattern not found' });
-    return res.status(HTTPStatus.OK).json(pattern);
+    
+    const patternData = pattern.toJSON();
+    
+    if (Array.isArray(patternData.qbs_ptn_questions)) {
+      const questionIds = patternData.qbs_ptn_questions.map(q => q.qbs_qst_id);
+      if (questionIds.length) {
+        const questions = await Question.findAll({
+          where: { qbs_question_id: { [Op.in]: questionIds } }
+        });
+        patternData.questions_details = questions;
+      }
+    }
+    
+    return res.status(HTTPStatus.OK).json(patternData);
   } catch (err) {
     return next(err);
   }
@@ -115,10 +117,29 @@ export async function getPattern(req, res, next) {
 
 export async function listPatterns(req, res, next) {
   try {
-    const query = {};
-    if (req.query.chapterId) query.qbs_chapter_id = parseInt(req.query.chapterId);
-    const list = await Pattern.find(query).sort({ qbs_ptn_id: -1 }).select({ sub_notes: 0 }).lean().exec();
-    return res.status(HTTPStatus.OK).json(list);
+    const where = {};
+    if (req.query.chapterId) where.qbs_chapter_id = Number(req.query.chapterId);
+    if (req.query.addedBy) where.qbs_ptn_added_by = Number(req.query.addedBy);
+
+    const patterns = await Pattern.findAll({
+      where,
+      order: [['qbs_ptn_id', 'DESC']],
+      attributes: ['qbs_ptn_id', 'qbs_ptn_name', 'qbs_chapter_id', 'total_mark', 'qbs_ptn_added_at']
+    });
+    
+    return res.status(HTTPStatus.OK).json(patterns);
+  } catch (err) {
+    return next(err);
+  }
+}
+
+export async function deletePattern(req, res, next) {
+  try {
+    const id = parseInt(req.params.id);
+    const deleted = await Pattern.destroy({ where: { qbs_ptn_id: id } });
+    
+    if (!deleted) return res.status(HTTPStatus.NOT_FOUND).json({ message: 'Pattern not found' });
+    return res.status(HTTPStatus.OK).json({ message: 'Pattern deleted' });
   } catch (err) {
     return next(err);
   }
@@ -126,15 +147,17 @@ export async function listPatterns(req, res, next) {
 
 export async function deletePatterns(req, res, next) {
   try {
-    // Delete multiple patterns by ids
-    const result = await Pattern.deleteMany({
-      $and: [
-        { qbs_ptn_id: { $in: req.body.ids } },
-        // Optionally, you can add ownership check here if needed 
-        { qbs_ptn_added_by: req.user.user_id }
-      ]
+    const { ids } = req.body;
+    
+    if (!ids || !Array.isArray(ids) || ids.length === 0) {
+      return res.status(HTTPStatus.BAD_REQUEST).json({ message: 'No pattern IDs provided' });
+    }
+    
+    const deleted = await Pattern.destroy({ 
+      where: { qbs_ptn_id: ids } 
     });
-    return res.status(HTTPStatus.OK).json({ message: 'Patterns deleted', deletedCount: result.deletedCount });
+    
+    return res.status(HTTPStatus.OK).json({ message: `${deleted} patterns deleted` });
   } catch (err) {
     return next(err);
   }

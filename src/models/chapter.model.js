@@ -1,47 +1,40 @@
-import mongoose, { Schema } from 'mongoose';
+/**
+ * Chapter Model - Sequelize for MariaDB
+ */
 
-const ChapterSchema = new Schema(
+import { DataTypes, Model } from 'sequelize';
+import sequelize from '../config/database.js';
+
+class Chapter extends Model {}
+
+Chapter.init(
   {
     qbs_chapter_id: {
-      type: Number,
-      unique: true,
-      index: true,
+      type: DataTypes.INTEGER,
       primaryKey: true,
+      autoIncrement: true,
     },
     qbs_chapter_name: {
-      type: String,
-      required: true,
-      trim: true,
+      type: DataTypes.STRING(255),
+      allowNull: false,
     },
     qbs_dept_id: {
-      type: Number,
-      required: true,
+      type: DataTypes.INTEGER,
+      allowNull: false,
     },
     qbs_sub_id: {
-      type: Number,
-      required: true,
+      type: DataTypes.INTEGER,
+      allowNull: false,
     },
   },
   {
+    sequelize,
+    modelName: 'Chapter',
+    tableName: 'chapters',
     timestamps: true,
-    versionKey: false,
-    _id: false,
-    collection: 'chapters',
-  },
+    createdAt: 'createdAt',
+    updatedAt: 'updatedAt',
+  }
 );
 
-// auto-increment qbs_chapter_id on create (simple approach)
-ChapterSchema.pre('save', async function (next) {
-  try {
-    if (this.isNew && (this.qbs_chapter_id == null)) {
-      const last = await mongoose.models.Chapter.findOne().sort('-qbs_chapter_id').select('qbs_chapter_id').exec();
-      this.qbs_chapter_id = last && last.qbs_chapter_id ? last.qbs_chapter_id + 1 : 1;
-    }
-    next();
-  } catch (err) {
-    next(err);
-  }
-});
-
-const Chapter = mongoose.models.Chapter || mongoose.model('Chapter', ChapterSchema);
 export default Chapter;

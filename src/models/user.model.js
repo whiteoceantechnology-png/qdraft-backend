@@ -1,161 +1,45 @@
-/* eslint-disable import/no-mutable-exports */
+/**
+ * User Model - Sequelize for MariaDB
+ */
 
-import mongoose, { Schema } from 'mongoose';
-import { hashSync, compareSync } from 'bcrypt-nodejs';
+import { DataTypes, Model } from 'sequelize';
+import bcrypt from 'bcrypt';
 import jwt from 'jsonwebtoken';
-import uniqueValidator from 'mongoose-unique-validator';
-
+import sequelize from '../config/database.js';
 import constants from '../config/constants.js';
 
-const UserSchema = new Schema(
-  {
-    email: {
-      type: String,
-      unique: true,
-      required: [true, 'Email is required!'],
-      trim: true,
-      validate: {
-        validator(email) {
-          const emailRegex = /^[-a-z0-9%S_+]+(\.[-a-z0-9%S_+]+)*@(?:[a-z0-9-]{1,63}\.){1,125}[a-z]{2,63}$/i;
-          return emailRegex.test(email);
-        },
-        message: '{VALUE} is not a valid email!',
-      },
-    },
-    mobile_number: {
-      type: String,
-      trim: true,
-    },
-    user_fname: {
-      type: String,
-      trim: true,     
-    },
-    user_id: {
-      type: Number,
-      unique: true,
-    },
-    school_name: {
-      type: String,
-      trim: true,
-    },
-    setup_id: {
-      type: Number,
-    },  
-    board: {
-      type: String,
-      trim: true,
-    },
-    class_name: {
-      type: String,
-      trim: true,
-    },
-    username: {
-      type: String,
-      trim: true,
-      unique: true,
-    },
-    dept_id: {
-      type: Number,
-    },
-    subject: {
-      type: String,
-      trim: true,
-    },
-    subject_id: {
-      type: Number,
-    },  
-    medium: {
-      type: Number,
-    },
-    start_date: {
-      type: Date,
-    },
-    end_date: {
-      type: Date,
-    },
-    is_demo_user: {
-      type: Boolean,
-      default: false,
-    },
-    password: {
-      type: String,
-      required: [true, 'Password is required!'],
-      trim: true,
-      minlength: [6, 'Password need to be longer!'],
-      validate: {
-        validator(password) {
-          // At least 6 chars and at least one digit
-          return typeof password === 'string' && password.length >= 6 && /\d/.test(password);
-        },
-        message: 'Password must be at least 6 characters and contain a number!',
-      },
-    },
-  },
-  { timestamps: true, versionKey: false },
-);
-
-UserSchema.plugin(uniqueValidator, {
-  message: '{VALUE} already taken!',
-});
-
-// Hash the user password and assign user_id on creation
-UserSchema.pre('save', async function(next) {
-  if (this.isModified('password')) {
-    this.password = this._hashPassword(this.password);
-  }
-  if (this.isNew) {
-    const lastUser = await mongoose.models.User.findOne().sort('-user_id').exec();
-    this.user_id = lastUser ? lastUser.user_id + 1 : 10000;
-  }
-  next();
-});
-
-UserSchema.methods = {
-  /**
-   * Favorites actions
-   *
-   * @public
-   */
+class User extends Model {
   /**
    * Authenticate the user
-   *
-   * @public
    * @param {String} password - provided by the user
    * @returns {Boolean} isMatch - password match
    */
   authenticateUser(password) {
-    return compareSync(password, this.password);
-  },
+    return bcrypt.compareSync(password, this.password);
+  }
+
   /**
    * Hash the user password
-   *
-   * @private
-   * @param {String} password - user password choose
-   * @returns {String} password - hash password
+   * @param {String} password - user password
+   * @returns {String} password - hashed password
    */
-  _hashPassword(password) {
-    return hashSync(password);
-  },
+  static hashPassword(password) {
+    return bcrypt.hashSync(password, 10);
+  }
 
   /**
    * Generate a jwt token for authentication
-   *
-   * @public
    * @returns {String} token - JWT token
    */
   createToken() {
     return jwt.sign(
-      {
-        user_id: this.user_id,
-      },
-      constants.JWT_SECRET,
+      { user_id: this.user_id },
+      constants.JWT_SECRET
     );
-  },
+  }
 
   /**
-   * Parse the user object in data we wanted to send when is auth
-   *
-   * @public
+   * Parse the user object for auth response
    * @returns {Object} User - ready for auth
    */
   toAuthJSON() {
@@ -174,26 +58,125 @@ UserSchema.methods = {
       medium: this.medium,
       start_date: this.start_date,
       end_date: this.end_date,
-      medium: this.medium,
     };
-  },
+  }
 
   /**
-   * Parse the user object in data we wanted to send
-   *
-   * @public
-   * @returns {Object} User - ready for populate
+   * Parse the user object for populate
+   * @returns {Object} User - basic info
    */
   toJSON() {
-    return {
-      user_id: this.user_id,
-      username: this.username,
-    };
+    const values = { ...this.get() };
+    delete values.password;
+    return values;
+  }
+}
+
+User.init(
+  {
+    user_id: {
+      type: DataTypes.INTEGER,
+      primaryKey: true,
+      autoIncrement: true,
+    },
+    email: {
+      type: DataTypes.STRING(255),
+      allowNull: false,
+      unique: true,
+      validate: {
+        isEmail: {
+          msg: 'Must be a valid email address',
+        },
+      },
+    },
+    mobile_number: {
+      type: DataTypes.STRING(20),
+      allowNull: true,
+    },
+    user_fname: {
+      type: DataTypes.STRING(255),
+      allowNull: true,
+    },
+    school_name: {
+      type: DataTypes.STRING(255),
+      allowNull: true,
+    },
+    setup_id: {
+      type: DataTypes.INTEGER,
+      allowNull: true,
+    },
+    board: {
+      type: DataTypes.STRING(100),
+      allowNull: true,
+    },
+    class_name: {
+      type: DataTypes.STRING(100),
+      allowNull: true,
+    },
+    username: {
+      type: DataTypes.STRING(100),
+      allowNull: true,
+      unique: true,
+    },
+    dept_id: {
+      type: DataTypes.INTEGER,
+      allowNull: true,
+    },
+    subject: {
+      type: DataTypes.STRING(255),
+      allowNull: true,
+    },
+    subject_id: {
+      type: DataTypes.INTEGER,
+      allowNull: true,
+    },
+    medium: {
+      type: DataTypes.INTEGER,
+      allowNull: true,
+    },
+    start_date: {
+      type: DataTypes.DATE,
+      allowNull: true,
+    },
+    end_date: {
+      type: DataTypes.DATE,
+      allowNull: true,
+    },
+    is_demo_user: {
+      type: DataTypes.BOOLEAN,
+      defaultValue: false,
+    },
+    password: {
+      type: DataTypes.STRING(255),
+      allowNull: false,
+      validate: {
+        len: {
+          args: [6, 255],
+          msg: 'Password must be at least 6 characters',
+        },
+      },
+    },
   },
-};
-
-
-  const User = mongoose.model('User', UserSchema);
-
+  {
+    sequelize,
+    modelName: 'User',
+    tableName: 'users',
+    timestamps: true,
+    createdAt: 'createdAt',
+    updatedAt: 'updatedAt',
+    hooks: {
+      beforeCreate: async (user) => {
+        if (user.password) {
+          user.password = User.hashPassword(user.password);
+        }
+      },
+      beforeUpdate: async (user) => {
+        if (user.changed('password')) {
+          user.password = User.hashPassword(user.password);
+        }
+      },
+    },
+  }
+);
 
 export default User;
