@@ -170,7 +170,7 @@ UNIQUE INDEX idx_tablename_tenant_unique (tenant_id, unique_field),
    ↓
 2. Generate JWT with { user_id, tenant_id, role }
    ↓
-3. Client sends: Authorization: JWT <token>
+3. Client sends: Authorization: Bearer <token>
    ↓
 4. authJwt middleware decodes → req.user
    ↓

@@ -24,7 +24,7 @@ All API endpoints (except login/register) require JWT authentication.
 
 Include the token in the Authorization header:
 \`\`\`
-Authorization: JWT <your-token>
+Authorization: Bearer <your-token>
 \`\`\`
 
 ### Rate Limiting

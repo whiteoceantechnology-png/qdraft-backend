@@ -14,7 +14,7 @@ api.login(username, password)
 **Backend Response:**
 ```json
 {
-  "access_token": "JWT eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...",
+  "access_token": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...",
   "user_id": 1,
   "tenant_id": 1,
   "username": "admin",
@@ -30,13 +30,13 @@ api.login(username, password)
 ### 2. Token Storage
 - Token is stored in `localStorage.adminToken`
 - User data is stored in `localStorage.adminUser`
-- Token includes 'JWT ' prefix from backend
+- Client adds 'Bearer ' prefix when making requests
 
 ### 3. Authenticated Requests
 All API requests automatically include the Authorization header:
 
 ```
-Authorization: JWT eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...
+Authorization: Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...
 ```
 
 ### 4. Token Validation
@@ -55,7 +55,7 @@ Authorization: JWT eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...
 ### 2. Test Authenticated Requests
 1. Navigate to any page (Users, Questions, etc.)
 2. Open Network tab in DevTools
-3. Verify all API requests include `Authorization: JWT ...` header
+3. Verify all API requests include `Authorization: Bearer ...` header
 4. Check responses are successful (200 status)
 
 ### 3. Test Token Expiration
@@ -113,7 +113,7 @@ All these methods now use JWT authentication:
 
 ## Security Notes
 
-1. **Token Format:** Backend expects `JWT <token>` format (not `Bearer <token>`)
+1. **Token Format:** Backend expects `Bearer <token>` format (standard OAuth 2.0)
 2. **Token Storage:** Uses localStorage (consider httpOnly cookies for production)
 3. **Token Expiration:** Handled by backend JWT expiration time
 4. **CORS:** Ensure CORS headers allow Authorization header
@@ -123,12 +123,12 @@ All these methods now use JWT authentication:
 
 ### Token Not Sent
 - Check `localStorage.adminToken` exists
-- Verify token format starts with 'JWT '
+- Verify client adds 'Bearer ' prefix before sending
 - Check browser console for errors
 
 ### 401 Unauthorized
 - Token may be expired
-- Token format may be incorrect
+- Token format may be incorrect (must be 'Bearer <token>')
 - User may be deactivated
 - Tenant may be inactive
 

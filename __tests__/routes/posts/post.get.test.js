@@ -30,7 +30,7 @@ describe(`GET ${ENDPOINT}`, () => {
       it('should return the post ask for', done => {
         server
           .get(`${ENDPOINT}/${testPost._id}`)
-          .set('Authorization', `JWT ${testUser.createToken()}`)
+          .set('Authorization', `Bearer ${testUser.createToken()}`)
           .end((err, res) => {
             const { body, status } = res;
             expect(status).to.equal(200);
@@ -50,7 +50,7 @@ describe(`GET ${ENDPOINT}`, () => {
       it('should send Unauthorized if token is invalid', done => {
         server
           .get(`${ENDPOINT}/${testPost2._id}`)
-          .set('Authorization', `JWT weigiweg`)
+          .set('Authorization', `Bearer weigiweg`)
           .end((err, res) => {
             const { status, text } = res;
             expect(status).to.equal(401);
@@ -66,7 +66,7 @@ describe(`GET ${ENDPOINT}`, () => {
       it('should return a list of posts', done => {
         server
           .get(ENDPOINT)
-          .set('Authorization', `JWT ${testUser.createToken()}`)
+          .set('Authorization', `Bearer ${testUser.createToken()}`)
           .end((err, res) => {
             const { body, status } = res;
             expect(status).to.equal(200);
@@ -90,7 +90,7 @@ describe(`GET ${ENDPOINT}`, () => {
         it('should send Unauthorized if token is invalid', done => {
           server
             .get(`${ENDPOINT}/${testPost2._id}`)
-            .set('Authorization', `JWT weigiweg`)
+            .set('Authorization', `Bearer weigiweg`)
             .end((err, res) => {
               const { status, text } = res;
               expect(status).to.equal(401);

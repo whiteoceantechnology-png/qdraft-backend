@@ -22,7 +22,7 @@ curl -X POST http://localhost:3000/api/auth/login \
   }'
 ```
 
-Save the token from response: `JWT <your_token>`
+Save the token from response: `Bearer <your_token>`
 
 ---
 
@@ -33,7 +33,7 @@ Save the token from response: `JWT <your_token>`
 ```bash
 curl -X POST http://localhost:3000/api/tenants \
   -H "Content-Type: application/json" \
-  -H "Authorization: JWT <super_admin_token>" \
+  -H "Authorization: Bearer <super_admin_token>" \
   -d '{
     "tenant_name": "Acme School",
     "tenant_code": "ACME001",
@@ -64,7 +64,7 @@ curl -X POST http://localhost:3000/api/auth/login \
   }'
 ```
 
-Save this token: `JWT <tenant_admin_token>`
+Save this token: `Bearer <tenant_admin_token>`
 
 ---
 
@@ -73,7 +73,7 @@ Save this token: `JWT <tenant_admin_token>`
 ```bash
 curl -X POST http://localhost:3000/api/users \
   -H "Content-Type: application/json" \
-  -H "Authorization: JWT <tenant_admin_token>" \
+  -H "Authorization: Bearer <tenant_admin_token>" \
   -d '{
     "username": "teacher_john",
     "email": "john@acme.school",
@@ -94,7 +94,7 @@ curl -X POST http://localhost:3000/api/users \
 ```bash
 curl -X POST http://localhost:3000/api/users \
   -H "Content-Type: application/json" \
-  -H "Authorization: JWT <tenant_admin_token>" \
+  -H "Authorization: Bearer <tenant_admin_token>" \
   -d '{
     "username": "student_alice",
     "email": "alice@acme.school",
@@ -114,7 +114,7 @@ curl -X POST http://localhost:3000/api/users \
 ```bash
 curl -X POST http://localhost:3000/api/users \
   -H "Content-Type: application/json" \
-  -H "Authorization: JWT <tenant_admin_token>" \
+  -H "Authorization: Bearer <tenant_admin_token>" \
   -d '{
     "username": "hacker_admin",
     "email": "hacker@acme.school",
@@ -138,7 +138,7 @@ curl -X POST http://localhost:3000/api/users \
 ```bash
 curl -X POST http://localhost:3000/api/users \
   -H "Content-Type: application/json" \
-  -H "Authorization: JWT <tenant_admin_token>" \
+  -H "Authorization: Bearer <tenant_admin_token>" \
   -d '{
     "username": "another_tadmin",
     "email": "tadmin2@acme.school",
@@ -162,7 +162,7 @@ curl -X POST http://localhost:3000/api/users \
 ```bash
 curl -X POST http://localhost:3000/api/users \
   -H "Content-Type: application/json" \
-  -H "Authorization: JWT <super_admin_token>" \
+  -H "Authorization: Bearer <super_admin_token>" \
   -d '{
     "username": "superadmin2",
     "email": "admin2@platform.com",
@@ -181,7 +181,7 @@ curl -X POST http://localhost:3000/api/users \
 
 ```bash
 curl -X GET "http://localhost:3000/api/users?page=1&limit=10" \
-  -H "Authorization: JWT <tenant_admin_token>"
+  -H "Authorization: Bearer <tenant_admin_token>"
 ```
 
 **Expected:** ✅ 200 OK
@@ -194,7 +194,7 @@ curl -X GET "http://localhost:3000/api/users?page=1&limit=10" \
 
 ```bash
 curl -X GET "http://localhost:3000/api/users?page=1&limit=10" \
-  -H "Authorization: JWT <super_admin_token>"
+  -H "Authorization: Bearer <super_admin_token>"
 ```
 
 **Expected:** ✅ 200 OK
@@ -221,7 +221,7 @@ Then try to create a user:
 ```bash
 curl -X POST http://localhost:3000/api/users \
   -H "Content-Type: application/json" \
-  -H "Authorization: JWT <user_token>" \
+  -H "Authorization: Bearer <user_token>" \
   -d '{
     "username": "hacker",
     "email": "hacker@test.com",
@@ -243,7 +243,7 @@ curl -X POST http://localhost:3000/api/users \
 
 ```bash
 curl -X GET http://localhost:3000/api/users/profile/me \
-  -H "Authorization: JWT <user_token>"
+  -H "Authorization: Bearer <user_token>"
 ```
 
 **Expected:** ✅ 200 OK
@@ -255,7 +255,7 @@ curl -X GET http://localhost:3000/api/users/profile/me \
 
 ```bash
 curl -X GET http://localhost:3000/api/tenants \
-  -H "Authorization: JWT <tenant_admin_token>"
+  -H "Authorization: Bearer <tenant_admin_token>"
 ```
 
 **Expected:** ❌ 403 Forbidden
@@ -408,7 +408,7 @@ chmod +x test-roles.sh
 ## Troubleshooting
 
 ### 401 Unauthorized
-- Check that Authorization header format is: `JWT <token>`
+- Check that Authorization header format is: `Bearer <token>`
 - Verify token is not expired
 - Confirm user is authenticated
 

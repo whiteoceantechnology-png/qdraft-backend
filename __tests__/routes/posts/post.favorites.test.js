@@ -24,7 +24,7 @@ describe(`POST ${ENDPOINT}/:id/favorite`, () => {
     it('should return OK and status of 200', done => {
       server
         .post(`${ENDPOINT}/${testPost._id}/favorite`)
-        .set('Authorization', `JWT ${testUser.createToken()}`)
+        .set('Authorization', `Bearer ${testUser.createToken()}`)
         .end(async (err, res) => {
           const { status } = res;
           expect(status).to.equal(200);
@@ -40,7 +40,7 @@ describe(`POST ${ENDPOINT}/:id/favorite`, () => {
     it('should return Unauthorized and status of 401 if no token valid', done => {
       server
         .post(`${ENDPOINT}/${testPost._id}/favorite`)
-        .set('Authorization', `JWT 123`)
+        .set('Authorization', `Bearer 123`)
         .end((err, res) => {
           const { status } = res;
           expect(status).to.equal(401);

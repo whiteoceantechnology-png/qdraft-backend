@@ -205,7 +205,7 @@ npm run test:watch
 **1. Super Admin creates a tenant with admin:**
 ```bash
 POST /api/tenants
-Authorization: JWT <super_admin_token>
+Authorization: Bearer <super_admin_token>
 
 {
   "tenant_name": "Acme School",
@@ -223,7 +223,7 @@ Authorization: JWT <super_admin_token>
 **2. Super Admin creates another super admin:**
 ```bash
 POST /api/users
-Authorization: JWT <super_admin_token>
+Authorization: Bearer <super_admin_token>
 
 {
   "username": "superadmin2",
@@ -237,7 +237,7 @@ Authorization: JWT <super_admin_token>
 **3. Tenant Admin creates a teacher:**
 ```bash
 POST /api/users
-Authorization: JWT <tenant_admin_token>
+Authorization: Bearer <tenant_admin_token>
 
 {
   "username": "teacher_john",
@@ -251,7 +251,7 @@ Authorization: JWT <tenant_admin_token>
 **4. Tenant Admin creates a regular user:**
 ```bash
 POST /api/users
-Authorization: JWT <tenant_admin_token>
+Authorization: Bearer <tenant_admin_token>
 
 {
   "username": "student_alice",
@@ -403,7 +403,7 @@ npm run dev:debug
 toAuthJSON() {
   return {
     _id: this._id,
-    token: `JWT ${this.createToken()}`,
+    token: this.createToken(),  // Raw token - client adds Bearer prefix
   };
 },
 

@@ -2,10 +2,10 @@
  * QB Server Admin - API Service
  * 
  * JWT Authentication Flow:
- * 1. Login with username/password -> receives access_token with 'JWT ' prefix
+ * 1. Login with username/password -> receives access_token (raw JWT)
  * 2. Token is stored in localStorage as 'adminToken'
- * 3. All API requests include Authorization header with the token
- * 4. Backend validates token format must be: 'JWT <token>'
+ * 3. All API requests include Authorization header with 'Bearer ' prefix
+ * 4. Backend validates token format must be: 'Bearer <token>'
  * 5. On 401 responses, token is cleared and user redirected to login
  */
 
@@ -45,8 +45,8 @@ class ApiService {
 
     // Add JWT token to Authorization header if available
     if (this.token) {
-      // Token already includes 'JWT ' prefix from backend
-      headers['Authorization'] = this.token;
+      // Add 'Bearer ' prefix as required by the backend
+      headers['Authorization'] = `Bearer ${this.token}`;
     }
 
     try {
@@ -80,7 +80,7 @@ class ApiService {
       body: JSON.stringify({ username, password }),
     });
 
-    // Backend returns access_token with 'JWT ' prefix
+    // Backend returns access_token (raw JWT without prefix)
     if (response.access_token) {
       this.setToken(response.access_token);
       this.setUser(response);

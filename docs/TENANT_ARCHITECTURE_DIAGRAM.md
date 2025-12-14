@@ -82,7 +82,7 @@
    │ chapters   │ ─────────────────────────────┘
    │            │
    │ Header:    │         4. MIDDLEWARE CHAIN
-   │ Authorization: JWT <token>
+   │ Authorization: Bearer <token>
    └────────────┘              │
                                ▼
                     ┌──────────────────────┐

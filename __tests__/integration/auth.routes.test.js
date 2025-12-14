@@ -26,7 +26,7 @@ app.post('/api/auth/login', (req, res) => {
   if (username === 'testuser' && password === 'password123') {
     return res.status(200).json({
       success: true,
-      access_token: 'JWT mock-token',
+      access_token: 'Bearer mock-token',
       user_id: 1,
       tenant_id: 1,
       username: 'testuser',

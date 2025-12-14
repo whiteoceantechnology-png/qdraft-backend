@@ -154,7 +154,7 @@ describe('User Model', () => {
   describe('toAuthJSON() method', () => {
     it('should return authentication response format', () => {
       const authResponse = {
-        access_token: 'JWT mock-token',
+        access_token: 'mock-token',
         user_id: 1,
         tenant_id: 1,
         username: 'testuser',
@@ -163,7 +163,7 @@ describe('User Model', () => {
       };
       
       expect(authResponse).toHaveProperty('access_token');
-      expect(authResponse.access_token).toMatch(/^JWT /);
+      expect(typeof authResponse.access_token).toBe('string');
       expect(authResponse).toHaveProperty('user_id');
       expect(authResponse).toHaveProperty('tenant_id');
     });

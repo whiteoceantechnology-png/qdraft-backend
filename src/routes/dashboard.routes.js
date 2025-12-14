@@ -19,7 +19,7 @@ const routes = new Router();
  * @apiGroup Dashboard
  */
 // /api/dashboard/
-routes.get('/', authJwt, getStats);
+routes.get('/', authJwt, getDashboardStats);
 
 /**
  * @api {get} /api/dashboard/user-stats Get user-based dashboard statistics
@@ -28,7 +28,7 @@ routes.get('/', authJwt, getStats);
  * @apiSuccess {Object} userBased User counts (qbm, patterns, questions)
  * @apiSuccess {Array} questionCountsParsed Array of question counts by type
  */
-routes.get('/user-stats', authJwt, getDashboardStats);
+// routes.get('/user-stats', authJwt, getDashboardStats);
 
 /**
  * @api {get} /api/dashboard/monthly Get monthly dashboard statistics

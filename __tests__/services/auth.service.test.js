@@ -49,21 +49,21 @@ describe('Auth Service', () => {
       });
     });
 
-    it('should return 401 if token format is invalid', () => {
-      req.headers = { authorization: 'Bearer token' };
+    it('should return 401 if token format is invalid (not Bearer)', () => {
+      req.headers = { authorization: 'Basic token' };
       
       authJwt(req, res, next);
       
       expect(res.status).toHaveBeenCalledWith(401);
       expect(res.json).toHaveBeenCalledWith({
         success: false,
-        message: 'Invalid token format. Use: JWT <token>',
+        message: 'Invalid token format. Use: Bearer <token>',
         code: 'INVALID_TOKEN_FORMAT',
       });
     });
 
-    it('should call passport authenticate with valid JWT format', () => {
-      req.headers = { authorization: 'JWT valid-token' };
+    it('should call passport authenticate with valid Bearer format', () => {
+      req.headers = { authorization: 'Bearer valid-token' };
       
       // Mock passport.authenticate to return a function
       passport.authenticate.mockReturnValue((req, res, next) => {
@@ -97,8 +97,8 @@ describe('Auth Service', () => {
       expect(res.status).toHaveBeenCalledWith(401);
     });
 
-    it('should reject JWT without token', () => {
-      req.headers = { authorization: 'JWT ' };
+    it('should reject Bearer without token', () => {
+      req.headers = { authorization: 'Bearer ' };
       
       // This passes format check, passport handles empty token
       passport.authenticate.mockReturnValue((req, res, next) => {

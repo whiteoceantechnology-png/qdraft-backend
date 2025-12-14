@@ -31,7 +31,7 @@ describe(`PUT ${ENDPOINT}/:id`, () => {
     it('should update a post with only the field provide', done => {
       server
         .patch(`${ENDPOINT}/${testPost._id}`)
-        .set('Authorization', `JWT ${testUser.createToken()}`)
+        .set('Authorization', `Bearer ${testUser.createToken()}`)
         .send({ title: 'Hello World' })
         .end((err, res) => {
           const { status, body } = res;
@@ -50,7 +50,7 @@ describe(`PUT ${ENDPOINT}/:id`, () => {
     it('should send Unauthorized if token is invalid', done => {
       server
         .patch(`${ENDPOINT}/${testPost2._id}`)
-        .set('Authorization', `JWT weigiweg`)
+        .set('Authorization', `Bearer weigiweg`)
         .send({ title: 'Hello World' })
         .end((err, res) => {
           const { status, text } = res;
@@ -63,7 +63,7 @@ describe(`PUT ${ENDPOINT}/:id`, () => {
     it('should send error message if the user is not the author', done => {
       server
         .patch(`${ENDPOINT}/${testPost2._id}`)
-        .set('Authorization', `JWT ${testUser2.createToken()}`)
+        .set('Authorization', `Bearer ${testUser2.createToken()}`)
         .send({ title: 'Hello World' })
         .end((err, res) => {
           const { status, text } = res;

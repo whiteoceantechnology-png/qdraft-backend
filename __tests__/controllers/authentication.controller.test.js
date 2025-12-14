@@ -40,7 +40,7 @@ describe('Authentication Controller', () => {
         user_id: 1,
         tenant_id: 1,
         username: 'testuser',
-        access_token: 'JWT mock-token',
+        access_token: 'Bearer mock-token',
       };
       req.user = userData;
       
@@ -191,7 +191,7 @@ describe('Authentication Controller', () => {
         toAuthJSON: () => ({
           user_id: 1,
           username: 'newuser',
-          access_token: 'JWT token',
+          access_token: 'Bearer token',
         }),
       };
       

@@ -323,11 +323,11 @@ describe('Question Controller', () => {
 ```bash
 # 1. Create two tenants
 curl -X POST http://localhost:3000/api/tenants \
-  -H "Authorization: JWT <super_admin_token>" \
+  -H "Authorization: Bearer <super_admin_token>" \
   -d '{"tenant_name":"Tenant A","tenant_code":"TA001","email":"a@test.com"}'
 
 curl -X POST http://localhost:3000/api/tenants \
-  -H "Authorization: JWT <super_admin_token>" \
+  -H "Authorization: Bearer <super_admin_token>" \
   -d '{"tenant_name":"Tenant B","tenant_code":"TB001","email":"b@test.com"}'
 
 # 2. Login as Tenant A admin
@@ -337,7 +337,7 @@ curl -X POST http://localhost:3000/api/auth/login \
 
 # 3. Create records as Tenant A
 curl -X POST http://localhost:3000/api/chapters \
-  -H "Authorization: JWT <TENANT_A_TOKEN>" \
+  -H "Authorization: Bearer <TENANT_A_TOKEN>" \
   -d '{"qbs_chapter_name":"Chapter 1"}'
 
 # 4. Login as Tenant B admin
@@ -347,7 +347,7 @@ curl -X POST http://localhost:3000/api/auth/login \
 
 # 5. Try to list chapters as Tenant B
 curl -X GET http://localhost:3000/api/chapters \
-  -H "Authorization: JWT <TENANT_B_TOKEN>"
+  -H "Authorization: Bearer <TENANT_B_TOKEN>"
 
 # ✅ Should return empty array (Tenant A's chapters are isolated)
 ```

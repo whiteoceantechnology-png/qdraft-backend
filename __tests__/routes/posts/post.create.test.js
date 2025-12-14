@@ -26,7 +26,7 @@ describe(`POST ${ENDPOINT}`, () => {
     it('should create a post', done => {
       server
         .post(ENDPOINT)
-        .set('Authorization', `JWT ${testUser.createToken()}`)
+        .set('Authorization', `Bearer ${testUser.createToken()}`)
         .send(testPost)
         .end((err, res) => {
           const { body, status } = res;
@@ -46,7 +46,7 @@ describe(`POST ${ENDPOINT}`, () => {
     it('should send Unauthorized if token is invalid', done => {
       server
         .post(ENDPOINT)
-        .set('Authorization', `JWT weigiweg`)
+        .set('Authorization', `Bearer weigiweg`)
         .send(testPost)
         .end((err, res) => {
           const { status, text } = res;

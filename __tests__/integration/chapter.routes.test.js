@@ -20,7 +20,7 @@ let chapters = [
 // Mock auth middleware
 const mockAuth = (req, res, next) => {
   const token = req.headers.authorization;
-  if (!token || !token.startsWith('JWT ')) {
+  if (!token || !token.startsWith('Bearer ')) {
     return res.status(401).json({ success: false, message: 'Unauthorized' });
   }
   req.user = { user_id: 1, tenant_id: 1 };
@@ -103,7 +103,7 @@ app.delete('/api/chapters/:id', mockAuth, (req, res) => {
 });
 
 const request = supertest(app);
-const validToken = 'JWT valid-test-token';
+const validToken = 'Bearer valid-test-token';
 
 describe('Chapter Routes Integration', () => {
   beforeEach(() => {

@@ -31,7 +31,7 @@ describe(`DELETE ${ENDPOINT}/:id`, () => {
     it('should delete a post', done => {
       server
         .delete(`${ENDPOINT}/${testPost._id}`)
-        .set('Authorization', `JWT ${testUser.createToken()}`)
+        .set('Authorization', `Bearer ${testUser.createToken()}`)
         .end((err, res) => {
           const { status } = res;
           expect(status).to.equal(200);
@@ -44,7 +44,7 @@ describe(`DELETE ${ENDPOINT}/:id`, () => {
     it('should send Unauthorized if token is invalid', done => {
       server
         .delete(`${ENDPOINT}/${testPost2._id}`)
-        .set('Authorization', `JWT weigiweg`)
+        .set('Authorization', `Bearer weigiweg`)
         .end((err, res) => {
           const { status, text } = res;
           expect(status).to.equal(401);
@@ -56,7 +56,7 @@ describe(`DELETE ${ENDPOINT}/:id`, () => {
     it('should send error message if the user is not the author', done => {
       server
         .delete(`${ENDPOINT}/${testPost2._id}`)
-        .set('Authorization', `JWT ${testUser2.createToken()}`)
+        .set('Authorization', `Bearer ${testUser2.createToken()}`)
         .end((err, res) => {
           const { status, text } = res;
           expect(status).to.equal(401);

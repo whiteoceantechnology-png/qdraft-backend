@@ -232,7 +232,7 @@ QB-Server is a multi-tenant SaaS Question Bank API built on Node.js/Express with
 |-----------|----------------|
 | **Authentication** | JWT tokens with 7-day expiry |
 | **Password Storage** | bcrypt hashing with salt rounds |
-| **Token Transport** | Authorization header (`JWT <token>`) |
+| **Token Transport** | Authorization header (`Bearer <token>`) |
 | **Role-Based Access** | User roles: admin, user, viewer |
 
 ---

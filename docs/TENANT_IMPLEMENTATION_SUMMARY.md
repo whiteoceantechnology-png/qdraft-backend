@@ -175,7 +175,7 @@ curl -X POST http://localhost:3000/api/auth/login \
 
 # Create tenant with admin
 curl -X POST http://localhost:3000/api/tenants \
-  -H "Authorization: JWT <token>" \
+  -H "Authorization: Bearer <token>" \
   -d '{
     "tenant_name": "School ABC",
     "tenant_code": "ABC001",
@@ -191,12 +191,12 @@ curl -X POST http://localhost:3000/api/tenants \
 ```bash
 # As Tenant A admin - create a chapter
 curl -X POST http://localhost:3000/api/chapters \
-  -H "Authorization: JWT <tenant_a_token>" \
+  -H "Authorization: Bearer <tenant_a_token>" \
   -d '{"qbs_chapter_name":"Math Chapter 1","qbs_sub_id":10}'
 
 # As Tenant B admin - list chapters (should be empty)
 curl -X GET http://localhost:3000/api/chapters \
-  -H "Authorization: JWT <tenant_b_token>"
+  -H "Authorization: Bearer <tenant_b_token>"
 
 # Returns: [] (cannot see Tenant A's chapters)
 ```

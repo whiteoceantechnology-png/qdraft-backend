@@ -336,7 +336,7 @@ CREATE TABLE chapters (
 
 **Headers:**
 ```
-Authorization: JWT <token>
+Authorization: Bearer <token>
 ```
 
 **Query Parameters:**
@@ -608,13 +608,14 @@ User.prototype.authenticateUser = function(password) {
 
 ```javascript
 // User Model - Generate JWT
+// Note: Token is returned without prefix - client adds "Bearer " when making requests
 User.prototype.toAuthJSON = function() {
   return {
     user_id: this.user_id,
     username: this.username,
     email: this.email,
     role: this.role,
-    token: `JWT ${jwt.sign(
+    access_token: jwt.sign(
       {
         user_id: this.user_id,
         tenant_id: this.tenant_id,
@@ -624,7 +625,7 @@ User.prototype.toAuthJSON = function() {
       },
       process.env.JWT_SECRET,
       { expiresIn: '7d' }
-    )}`,
+    ),
   };
 };
 ```
