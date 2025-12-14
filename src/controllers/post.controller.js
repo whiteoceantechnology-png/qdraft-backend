@@ -5,8 +5,8 @@
 
 import Joi from 'joi';
 import HTTPStatus from 'http-status';
-import Post from '../models/post.model.js';
-import User from '../models/user.model.js';
+import { Post, User } from '../models/index.js';
+import { tenantFilter, tenantData } from '../middlewares/tenant.middleware.js';
 
 /**
  * Validation schemas

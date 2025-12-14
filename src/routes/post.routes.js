@@ -3,7 +3,7 @@
  */
 
 import { Router } from 'express';
-import validate from 'express-validation';
+import validate from '../middlewares/validation.middleware.js';
 
 import * as PostController from '../controllers/post.controller.js';
 import { authJwt } from '../services/auth.js';

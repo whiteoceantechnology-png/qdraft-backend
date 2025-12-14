@@ -29,7 +29,7 @@ Chapter.init(
     },
     qbs_dept_id: {
       type: DataTypes.INTEGER,
-      allowNull: false,
+      allowNull: true,
     },
     qbs_sub_id: {
       type: DataTypes.INTEGER,

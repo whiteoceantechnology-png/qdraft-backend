@@ -1,43 +1,118 @@
-import faker from 'faker';
+import { faker } from '@faker-js/faker';
+import { User, Tenant } from '../models/index.js';
 
-import User from '../models/user.model.js';
-
-export async function userSeed(count) {
+/**
+ * Seed an admin user with a default tenant
+ * Creates tenant if not exists, creates admin if not exists
+ */
+export async function seedAdminUser() {
   try {
-    const users = [];
+    // Create or find default tenant
+    let tenant = await Tenant.findOne({ where: { tenant_code: 'DEFAULT' } });
+    if (!tenant) {
+      tenant = await Tenant.create({
+        tenant_name: 'Default Organization',
+        tenant_code: 'DEFAULT',
+        email: 'admin@qbserver.com',
+        is_active: true,
+        subscription_plan: 'enterprise',
+        max_users: 100,
+        max_questions: 10000,
+        max_exams: 500,
+      });
+      console.log('✓ Created default tenant');
+    }
 
-  Array.from({ length: count || 10 }).map(() => {
-    const fakeUser = {
-      name: `${faker.name.firstName()} ${faker.name.lastName()}`,
-      username: faker.internet.userName(),
-      email: faker.internet.email().toLowerCase(),
-      password: 'password1',
-      mobile_number: faker.phone.phoneNumber(),
-      user_fname: faker.name.firstName(),
-      school_name: faker.company.companyName(),
-      setup_id: faker.random.number({ min: 100, max: 999 }),
-      board: faker.random.arrayElement(['CBSE', 'ICSE', 'State Board']),
-      class_name: faker.random.arrayElement(['10th', '11th', '12th']),
-      dept_id: faker.random.number({ min: 1, max: 20 }),
-      subject: faker.random.arrayElement(['Math', 'Science', 'History']),
-      subject_id: faker.random.number({ min: 1, max: 50 }),
-      medium: faker.random.arrayElement([1, 2]), // 1 for English, 2 for Hindi
-    };
-    return users.push(fakeUser);
-  });
-  const savePromises = users.map(u => new User(u).save());
-  const savedUsers = await Promise.all(savePromises);
-  return savedUsers;
+    // Create or find admin user
+    let admin = await User.findOne({ 
+      where: { 
+        username: 'admin',
+        tenant_id: tenant.tenant_id 
+      } 
+    });
+
+    if (!admin) {
+      admin = await User.create({
+        tenant_id: tenant.tenant_id,
+        username: 'admin',
+        email: 'admin@qbserver.com',
+        password: 'admin123',
+        user_fname: 'Admin',
+        role: 'super_admin',
+        is_active: true,
+      });
+      console.log('✓ Created admin user');
+      console.log('  Username: admin');
+      console.log('  Password: admin123');
+    } else {
+      console.log('✓ Admin user already exists');
+    }
+
+    return { tenant, admin };
   } catch (error) {
-    console.log('User Seed Error:', error);
-    return error
+    console.error('Admin Seed Error:', error);
+    throw error;
   }
 }
 
-export async function deleteUserSeed() {
+export async function userSeed(count, tenantId = null) {
   try {
-    return await User.remove();
+    // Get or create a default tenant for seeding
+    let seedTenantId = tenantId;
+    
+    if (!seedTenantId) {
+      let tenant = await Tenant.findOne({ where: { tenant_code: 'SEED' } });
+      if (!tenant) {
+        tenant = await Tenant.create({
+          tenant_name: 'Seed Tenant',
+          tenant_code: 'SEED',
+          is_active: true,
+          subscription_plan: 'basic',
+        });
+      }
+      seedTenantId = tenant.tenant_id;
+    }
+
+    const users = [];
+
+    for (let i = 0; i < (count || 10); i++) {
+      const fakeUser = {
+        tenant_id: seedTenantId,
+        username: faker.internet.userName() + '_' + Date.now() + i,
+        email: `seed_${i}_${Date.now()}@${faker.internet.domainName()}`,
+        password: 'password1',
+        mobile_number: faker.phone.number(),
+        user_fname: faker.person.firstName(),
+        school_name: faker.company.name(),
+        setup_id: faker.number.int({ min: 100, max: 999 }),
+        board: faker.helpers.arrayElement(['CBSE', 'ICSE', 'State Board']),
+        class_name: faker.helpers.arrayElement(['10th', '11th', '12th']),
+        dept_id: faker.number.int({ min: 1, max: 20 }),
+        subject: faker.helpers.arrayElement(['Math', 'Science', 'History']),
+        subject_id: faker.number.int({ min: 1, max: 50 }),
+        medium: faker.helpers.arrayElement([1, 2]),
+        role: 'user',
+      };
+      users.push(fakeUser);
+    }
+
+    const savedUsers = await User.bulkCreate(users, { individualHooks: true });
+    return savedUsers;
+  } catch (error) {
+    console.log('User Seed Error:', error);
+    return error;
+  }
+}
+
+export async function deleteUserSeed(tenantId = null) {
+  try {
+    const whereClause = { role: 'user' };
+    if (tenantId) {
+      whereClause.tenant_id = tenantId;
+    }
+    return await User.destroy({ where: whereClause });
   } catch (e) {
+    console.log('Delete User Seed Error:', e);
     return e;
   }
 }

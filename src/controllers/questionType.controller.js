@@ -4,7 +4,7 @@
  */
 
 import HTTPStatus from 'http-status';
-import QuestionType from '../models/questiontype.model.js';
+import { QuestionType } from '../models/index.js';
 import { tenantFilter, tenantData } from '../middlewares/tenant.middleware.js';
 
 /**
@@ -19,6 +19,7 @@ export async function create(req, res, next) {
       name: req.body.name || req.body.qbs_qs_type_name,
       marks: req.body.marks || 1,
       subject_id: req.body.subject_id,
+      chapter_id: req.body.chapter_id || null,
     });
 
     return res.status(HTTPStatus.CREATED).json({
@@ -37,10 +38,11 @@ export async function create(req, res, next) {
  */
 export async function list(req, res, next) {
   try {
-    const { subjectId, limit = 100, skip = 0 } = req.query;
+    const { subjectId, chapterId, limit = 100, skip = 0 } = req.query;
 
     const where = { ...tenantFilter(req) };
     if (subjectId) where.subject_id = subjectId;
+    if (chapterId) where.chapter_id = chapterId;
 
     const questionTypes = await QuestionType.findAll({
       where,
@@ -102,6 +104,7 @@ export async function update(req, res, next) {
     if (req.body.name) updateData.name = req.body.name;
     if (req.body.marks !== undefined) updateData.marks = req.body.marks;
     if (req.body.subject_id) updateData.subject_id = req.body.subject_id;
+    if (req.body.chapter_id !== undefined) updateData.chapter_id = req.body.chapter_id || null;
 
     await questionType.update(updateData);
 
@@ -150,6 +153,29 @@ export async function getCount(req, res, next) {
     });
 
     return res.status(HTTPStatus.OK).json({ count });
+  } catch (err) {
+    err.status = HTTPStatus.BAD_REQUEST;
+    return next(err);
+  }
+}
+
+/**
+ * GET /api/question-types/chapter/:chapterId
+ * Get question types by chapter ID
+ */
+export async function getByChapter(req, res, next) {
+  try {
+    const { chapterId } = req.params;
+
+    const questionTypes = await QuestionType.findAll({
+      where: {
+        ...tenantFilter(req),
+        chapter_id: chapterId,
+      },
+      order: [['qbs_qs_type_id', 'ASC']],
+    });
+
+    return res.status(HTTPStatus.OK).json(questionTypes);
   } catch (err) {
     err.status = HTTPStatus.BAD_REQUEST;
     return next(err);

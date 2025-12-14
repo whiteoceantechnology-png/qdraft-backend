@@ -5,9 +5,7 @@
 
 import HTTPStatus from 'http-status';
 import { Op } from 'sequelize';
-import Question from '../models/question.model.js';
-import QuestionType from '../models/questiontype.model.js';
-import Chapter from '../models/chapter.model.js';
+import { Question, QuestionType, Chapter } from '../models/index.js';
 import { tenantFilter, tenantData } from '../middlewares/tenant.middleware.js';
 
 /**
@@ -17,10 +15,10 @@ import { tenantFilter, tenantData } from '../middlewares/tenant.middleware.js';
 export async function getQuestionsWithRelatedData(req, res, next) {
   try {
     const { qbs_chapter_id, qbs_qst_ids = [] } = req.query;
-    
+
     // Build where clause with tenant filter
     const where = { ...tenantFilter(req) };
-    
+
     if (qbs_chapter_id) {
       where.qbs_chapter_id = Number(qbs_chapter_id);
     }
@@ -101,7 +99,7 @@ export async function createQuestion(req, res, next) {
       qbs_chapter_id: req.body.chapterId,
       qbs_question_added_by: req.user.user_id,
       qbs_sub_id: req.body.subjectId || req.user.subject_id,
-      qbs_dept_id: req.body.deptId || req.user.dept_id,
+      qbs_dept_id: req.body.deptId || req.user.dept_id || 0,
     });
 
     return res.status(HTTPStatus.CREATED).json({
@@ -120,7 +118,7 @@ export async function createQuestion(req, res, next) {
 export async function getQuestions(req, res, next) {
   try {
     const { chapterId, questionType, limit = 50, skip = 0 } = req.query;
-    
+
     const where = { ...tenantFilter(req) };
     if (chapterId) where.qbs_chapter_id = chapterId;
     if (questionType) where.qbs_qst_type_id = questionType;
@@ -240,7 +238,7 @@ export async function deleteQuestion(req, res, next) {
 export async function getQuestionCount(req, res, next) {
   try {
     const { chapterId, subjectId, deptId } = req.query;
-    
+
     const where = { ...tenantFilter(req) };
     if (chapterId) where.qbs_chapter_id = chapterId;
     if (subjectId) where.qbs_sub_id = subjectId;
@@ -287,6 +285,78 @@ export async function bulkCreateQuestions(req, res, next) {
       message: `${created.length} questions created successfully`,
       count: created.length,
     });
+  } catch (error) {
+    next(error);
+  }
+}
+
+/**
+ * POST /api/questions/chapter/:chapterId
+ * Get questions with options for a specific chapter
+ */
+export async function getQuestionsWithOptions(req, res, next) {
+  try {
+    const chapterId = Number(req.params.chapterId);
+    const { questionTypeIds, excludeIds } = req.body || {};
+
+    if (!chapterId || isNaN(chapterId)) {
+      return res.status(HTTPStatus.BAD_REQUEST).json({ message: 'Valid chapterId is required' });
+    }
+
+    // Build where clause
+    const where = {
+      ...tenantFilter(req),
+      qbs_chapter_id: chapterId,
+    };
+
+    // Filter by question type IDs if provided
+    if (Array.isArray(questionTypeIds) && questionTypeIds.length > 0) {
+      where.qbs_qst_type_id = { [Op.in]: questionTypeIds.map(Number) };
+    }
+
+    // Exclude specific question IDs if provided
+    if (Array.isArray(excludeIds) && excludeIds.length > 0) {
+      where.qbs_question_id = { [Op.notIn]: excludeIds.map(Number) };
+    }
+
+    const questions = await Question.findAll({
+      where,
+      include: [
+        {
+          model: QuestionType,
+          as: 'questionType',
+          attributes: ['qbs_qs_type_id', 'qbs_qs_type_name', 'marks'],
+        },
+        {
+          model: Chapter,
+          as: 'chapter',
+          attributes: ['qbs_chapter_id', 'qbs_chapter_name'],
+        },
+      ],
+      order: [['qbs_question_id', 'DESC']],
+    });
+
+    // Format response with options included
+    const formattedQuestions = questions.map(q => {
+      const qData = q.toJSON();
+      return {
+        qbs_question_id: qData.qbs_question_id,
+        qbs_qst_type: qData.qbs_qst_type,
+        qbs_qst_type_id: qData.qbs_qst_type_id,
+        qbs_questions: qData.qbs_questions,
+        qbs_solution: qData.qbs_solution,
+        qbs_correct_answer: qData.qbs_correct_answer,
+        qbs_qst_mark: qData.qbs_qst_mark,
+        qbs_chapter_id: qData.qbs_chapter_id,
+        qbs_dept_id: qData.qbs_dept_id,
+        qbs_sub_id: qData.qbs_sub_id,
+        options: qData.options || [],
+        questionType: qData.questionType,
+        chapter: qData.chapter,
+      };
+    });
+
+    return res.status(HTTPStatus.OK).json(formattedQuestions);
   } catch (error) {
     next(error);
   }

@@ -39,6 +39,14 @@ QuestionType.init(
       type: DataTypes.INTEGER,
       allowNull: false,
     },
+    chapter_id: {
+      type: DataTypes.INTEGER,
+      allowNull: true,
+      references: {
+        model: 'chapters',
+        key: 'qbs_chapter_id',
+      },
+    },
   },
   {
     sequelize,

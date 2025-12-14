@@ -4,8 +4,43 @@
  */
 
 import HTTPStatus from 'http-status';
-import User from '../models/user.model.js';
-import Tenant from '../models/tenant.model.js';
+import Joi from 'joi';
+import { User, Tenant } from '../models/index.js';
+
+/**
+ * Validation schemas
+ */
+export const validation = {
+  login: {
+    body: Joi.object({
+      username: Joi.string().required().messages({
+        'string.empty': 'Username is required',
+        'any.required': 'Username is required',
+      }),
+      password: Joi.string().required().messages({
+        'string.empty': 'Password is required',
+        'any.required': 'Password is required',
+      }),
+    }),
+  },
+  register: {
+    body: Joi.object({
+      username: Joi.string().min(3).max(50).required(),
+      email: Joi.string().email().required(),
+      password: Joi.string().min(6).required(),
+      user_fname: Joi.string().allow('', null),
+      mobile_number: Joi.string().allow('', null),
+      tenant_id: Joi.number().allow(null),
+      tenant_code: Joi.string().allow('', null),
+    }),
+  },
+  changePassword: {
+    body: Joi.object({
+      currentPassword: Joi.string().required(),
+      newPassword: Joi.string().min(6).required(),
+    }),
+  },
+};
 
 /**
  * POST /api/auth/login

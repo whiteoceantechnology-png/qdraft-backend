@@ -5,15 +5,53 @@
 
 import HTTPStatus from 'http-status';
 import { faker } from '@faker-js/faker';
-import User from '../models/user.model.js';
-import Tenant from '../models/tenant.model.js';
-import Question from '../models/question.model.js';
-import Chapter from '../models/chapter.model.js';
-import Pattern from '../models/pattern.model.js';
-import Exam from '../models/exam.model.js';
-import Blueprint from '../models/blueprint.model.js';
-import QuestionType from '../models/questiontype.model.js';
-import Post from '../models/post.model.js';
+import {
+  User,
+  Tenant,
+  Question,
+  Chapter,
+  Pattern,
+  Exam,
+  Blueprint,
+  QuestionType,
+  Post,
+} from '../models/index.js';
+import { seedAdminUser } from '../seeds/user.seed.js';
+
+/**
+ * GET /api/seeds/admin
+ * Create default admin user
+ */
+export async function createAdmin(req, res, next) {
+  try {
+    const result = await seedAdminUser();
+    
+    return res.status(HTTPStatus.OK).json({
+      success: true,
+      message: 'Admin user seeded successfully',
+      data: {
+        tenant: {
+          tenant_id: result.tenant.tenant_id,
+          tenant_name: result.tenant.tenant_name,
+          tenant_code: result.tenant.tenant_code,
+        },
+        admin: {
+          user_id: result.admin.user_id,
+          username: result.admin.username,
+          email: result.admin.email,
+          role: result.admin.role,
+        },
+        credentials: {
+          username: 'admin',
+          password: 'admin123',
+        },
+      },
+    });
+  } catch (err) {
+    err.status = HTTPStatus.BAD_REQUEST;
+    return next(err);
+  }
+}
 
 /**
  * GET /api/seeds/clear

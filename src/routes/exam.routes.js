@@ -6,9 +6,11 @@ const routes = new Router();
 
 routes.post('/', authJwt, examController.createExam);
 routes.get('/', authJwt, examController.listExams);
+routes.get('/count', authJwt, examController.getExamCount);
 routes.get('/:id', authJwt, examController.getExam);
 routes.get('/:id/form', authJwt, examController.getExamFormById);
 routes.put('/:id', authJwt, examController.updateExam);
+routes.put('/:id/questions', authJwt, examController.replaceExamQuestions);
 routes.patch('/:id/questions', authJwt, examController.updateExamQuestion);
 routes.delete('/:id', authJwt, examController.deleteExam);
 

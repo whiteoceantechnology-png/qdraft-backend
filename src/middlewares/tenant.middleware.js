@@ -2,10 +2,39 @@
  * Tenant Middleware
  * Extracts tenant_id from JWT token and attaches to request
  * Provides tenant context for all database queries
+ * Includes caching for performance
  */
 
 import HTTPStatus from 'http-status';
 import { Tenant } from '../models/index.js';
+import cache, { keys, TTL } from '../services/cache.js';
+
+/**
+ * Get tenant from cache or database
+ * @param {number} tenantId - Tenant ID
+ * @returns {Object|null} Tenant object or null
+ */
+async function getTenantCached(tenantId) {
+  const cacheKey = keys.tenant(tenantId);
+  
+  // Try cache first
+  let tenant = cache.get(cacheKey);
+  
+  if (!tenant) {
+    // Cache miss - fetch from database
+    tenant = await Tenant.findOne({
+      where: { tenant_id: tenantId, is_active: true },
+      raw: true, // Raw query for performance
+    });
+    
+    if (tenant) {
+      // Cache for 15 minutes
+      cache.set(cacheKey, tenant, TTL.LONG);
+    }
+  }
+  
+  return tenant;
+}
 
 /**
  * Middleware to attach tenant context from authenticated user
@@ -15,8 +44,6 @@ export const tenantContext = async (req, res, next) => {
   try {
     // User should be attached by authJwt middleware
     if (!req.user) {
-      // If no user, just continue - tenantId will be undefined
-      // This allows routes to optionally use tenant context
       req.tenantId = null;
       return next();
     }
@@ -28,13 +55,13 @@ export const tenantContext = async (req, res, next) => {
       return next();
     }
 
-    // Verify tenant exists and is active
-    const tenant = await Tenant.findOne({
-      where: { tenant_id: tenantId, is_active: true },
-    });
+    // Get tenant (cached)
+    const tenant = await getTenantCached(tenantId);
 
     if (!tenant) {
       return res.status(HTTPStatus.FORBIDDEN).json({
+        success: false,
+        code: 'TENANT_INACTIVE',
         message: 'Tenant not found or inactive',
       });
     }
@@ -57,19 +84,21 @@ export const requireTenant = async (req, res, next) => {
   try {
     if (!req.user || !req.user.tenant_id) {
       return res.status(HTTPStatus.FORBIDDEN).json({
+        success: false,
+        code: 'TENANT_REQUIRED',
         message: 'Tenant context required',
       });
     }
 
     const tenantId = req.user.tenant_id;
 
-    // Verify tenant exists and is active
-    const tenant = await Tenant.findOne({
-      where: { tenant_id: tenantId, is_active: true },
-    });
+    // Get tenant (cached)
+    const tenant = await getTenantCached(tenantId);
 
     if (!tenant) {
       return res.status(HTTPStatus.FORBIDDEN).json({
+        success: false,
+        code: 'TENANT_INACTIVE',
         message: 'Tenant not found or inactive',
       });
     }
@@ -128,7 +157,7 @@ export const requireSuperAdmin = (req, res, next) => {
  * Usage: Model.findAll({ where: { ...tenantFilter(req), ...otherFilters } })
  */
 export const tenantFilter = (req) => {
-  return { tenant_id: req.tenantId };
+  return { tenant_id: req.tenantId || req.user?.tenant_id};
 };
 
 /**
@@ -136,7 +165,7 @@ export const tenantFilter = (req) => {
  * Usage: Model.create({ ...tenantData(req), ...otherData })
  */
 export const tenantData = (req) => {
-  return { tenant_id: req.tenantId };
+  return { tenant_id: req.tenantId || req.user?.tenant_id };
 };
 
 /**

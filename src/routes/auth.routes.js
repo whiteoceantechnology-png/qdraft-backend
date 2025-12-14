@@ -1,26 +1,28 @@
 /**
  * Authentication Routes
- * Multi-tenant support
+ * Multi-tenant support with rate limiting
  */
 
 import { Router } from 'express';
+import validate from '../middlewares/validation.middleware.js';
 
 import * as AuthController from '../controllers/authentication.controller.js';
 import { authLocal, authJwt } from '../services/auth.js';
+import { authRateLimit } from '../middlewares/performance.middleware.js';
 
 const routes = new Router();
 
 /**
  * POST /api/auth/login
- * Login with email/password
+ * Login with email/password (rate limited)
  */
-routes.post('/login', authLocal, AuthController.login);
+routes.post('/login', authRateLimit, validate(AuthController.validation.login), authLocal, AuthController.login);
 
 /**
  * POST /api/auth/register
- * Register a new user
+ * Register a new user (rate limited)
  */
-routes.post('/register', AuthController.register);
+routes.post('/register', authRateLimit, validate(AuthController.validation.register), AuthController.register);
 
 /**
  * GET /api/auth/me
@@ -30,9 +32,9 @@ routes.get('/me', authJwt, AuthController.getMe);
 
 /**
  * POST /api/auth/change-password
- * Change password
+ * Change password (rate limited)
  */
-routes.post('/change-password', authJwt, AuthController.changePassword);
+routes.post('/change-password', authJwt, authRateLimit, validate(AuthController.validation.changePassword), AuthController.changePassword);
 
 /**
  * POST /api/auth/refresh

@@ -65,12 +65,25 @@ export default function logErrorService(err, req, res, next) {
   if (err.errors) {
     error.errors = {};
     const { errors } = err;
-    if (Array.isArray(errors)) {
-      error.errors = RequiredError.makePretty(errors);
-    } else {
-      Object.keys(errors).forEach(key => {
-        error.errors[key] = errors[key].message;
-      });
+    try {
+      if (Array.isArray(errors)) {
+        error.errors = RequiredError.makePretty(errors);
+      } else if (typeof errors === 'object' && errors !== null) {
+        Object.keys(errors).forEach(key => {
+          const errVal = errors[key];
+          // Handle different error formats
+          if (typeof errVal === 'string') {
+            error.errors[key] = errVal;
+          } else if (errVal && typeof errVal === 'object') {
+            error.errors[key] = errVal.message || errVal.msg || String(errVal);
+          } else {
+            error.errors[key] = String(errVal);
+          }
+        });
+      }
+    } catch (parseErr) {
+      console.error('Error parsing validation errors:', parseErr);
+      error.errors = { general: 'Validation error occurred' };
     }
   }
 

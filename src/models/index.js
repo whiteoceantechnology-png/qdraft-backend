@@ -15,6 +15,7 @@ import Exam from './exam.model.js';
 import Blueprint from './blueprint.model.js';
 import QuestionType from './questiontype.model.js';
 import Post from './post.model.js';
+import Subject from './subject.model.js';
 
 // ==========================================
 // TENANT ASSOCIATIONS (One-to-Many)
@@ -95,6 +96,18 @@ Blueprint.belongsTo(User, { foreignKey: 'qbs_blp_added_by', as: 'addedBy' });
 User.hasMany(Post, { foreignKey: 'author_id', as: 'posts' });
 Post.belongsTo(User, { foreignKey: 'author_id', as: 'author' });
 
+// Tenant -> Subjects
+Tenant.hasMany(Subject, { foreignKey: 'tenant_id', as: 'subjects' });
+Subject.belongsTo(Tenant, { foreignKey: 'tenant_id', as: 'tenant' });
+
+// Subject -> User (created_by)
+User.hasMany(Subject, { foreignKey: 'created_by', as: 'createdSubjects' });
+Subject.belongsTo(User, { foreignKey: 'created_by', as: 'creator' });
+
+// Subject -> User (assignment)
+Subject.hasMany(User, { foreignKey: 'subject_id', as: 'assignedUsers' });
+User.belongsTo(Subject, { foreignKey: 'subject_id', as: 'assignedSubject' });
+
 // ==========================================
 // EXPORT ALL MODELS
 // ==========================================
@@ -110,6 +123,7 @@ export {
   Blueprint,
   QuestionType,
   Post,
+  Subject,
 };
 
 export default {
@@ -123,4 +137,5 @@ export default {
   Blueprint,
   QuestionType,
   Post,
+  Subject,
 };

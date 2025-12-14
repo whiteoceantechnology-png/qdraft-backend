@@ -5,8 +5,7 @@
 
 import HTTPStatus from 'http-status';
 import { Op } from 'sequelize';
-import Pattern from '../models/pattern.model.js';
-import Chapter from '../models/chapter.model.js';
+import { Pattern, Chapter } from '../models/index.js';
 import { tenantFilter, tenantData } from '../middlewares/tenant.middleware.js';
 
 /**

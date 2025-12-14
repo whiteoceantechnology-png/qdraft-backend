@@ -4,15 +4,13 @@
  */
 
 import HTTPStatus from 'http-status';
-import { Op, fn, col } from 'sequelize';
-import Chapter from '../models/chapter.model.js';
-import Question from '../models/question.model.js';
-import Pattern from '../models/pattern.model.js';
+import { Op, fn, col, literal } from 'sequelize';
+import { Chapter, Question, Pattern } from '../models/index.js';
 import { tenantFilter, tenantData } from '../middlewares/tenant.middleware.js';
 
 /**
  * GET /api/chapters
- * Get list of chapters with question counts
+ * Get list of chapters with question counts (optimized - single query)
  */
 export async function getList(req, res, next) {
   try {
@@ -24,34 +22,30 @@ export async function getList(req, res, next) {
     if (subjectId) where.qbs_sub_id = subjectId;
     if (deptId) where.qbs_dept_id = deptId;
 
+    // Get chapters with question counts in a single query using LEFT JOIN
     const chapters = await Chapter.findAll({
       where,
+      attributes: [
+        'qbs_chapter_id',
+        'qbs_chapter_name',
+        'qbs_sub_id',
+        'qbs_dept_id',
+        [fn('COUNT', col('questions.qbs_question_id')), 'question_count'],
+      ],
+      include: [{
+        model: Question,
+        as: 'questions',
+        attributes: [],
+        required: false,
+      }],
+      group: ['Chapter.qbs_chapter_id'],
       order: [['qbs_chapter_name', 'ASC']],
       limit,
       offset: skip,
+      subQuery: false,
     });
 
-    // Get question counts for each chapter
-    const chaptersWithCounts = await Promise.all(
-      chapters.map(async (chapter) => {
-        const questionCount = await Question.count({
-          where: {
-            ...tenantFilter(req),
-            qbs_chapter_id: chapter.qbs_chapter_id,
-          },
-        });
-
-        return {
-          qbs_chapter_id: chapter.qbs_chapter_id,
-          qbs_chapter_name: chapter.qbs_chapter_name,
-          qbs_sub_id: chapter.qbs_sub_id,
-          qbs_dept_id: chapter.qbs_dept_id,
-          question_count: questionCount,
-        };
-      })
-    );
-
-    return res.status(HTTPStatus.OK).json(chaptersWithCounts);
+    return res.status(HTTPStatus.OK).json(chapters);
   } catch (err) {
     err.status = HTTPStatus.BAD_REQUEST;
     return next(err);
@@ -180,32 +174,31 @@ export async function getBySubjectId(req, res, next) {
 
 /**
  * GET /api/chapters/with-patterns
- * Get chapters with pattern counts
+ * Get chapters with pattern counts (optimized - single query)
  */
 export async function getChaptersWithPatternCounts(req, res, next) {
   try {
     const chapters = await Chapter.findAll({
       where: tenantFilter(req),
+      attributes: [
+        'qbs_chapter_id',
+        'qbs_chapter_name',
+        'qbs_sub_id',
+        'qbs_dept_id',
+        [fn('COUNT', col('patterns.qbs_ptn_id')), 'pattern_count'],
+      ],
+      include: [{
+        model: Pattern,
+        as: 'patterns',
+        attributes: [],
+        required: false,
+      }],
+      group: ['Chapter.qbs_chapter_id'],
       order: [['qbs_chapter_name', 'ASC']],
+      subQuery: false,
     });
 
-    const chaptersWithCounts = await Promise.all(
-      chapters.map(async (chapter) => {
-        const patternCount = await Pattern.count({
-          where: {
-            ...tenantFilter(req),
-            qbs_chapter_id: chapter.qbs_chapter_id,
-          },
-        });
-
-        return {
-          ...chapter.toJSON(),
-          pattern_count: patternCount,
-        };
-      })
-    );
-
-    return res.status(HTTPStatus.OK).json(chaptersWithCounts);
+    return res.status(HTTPStatus.OK).json(chapters);
   } catch (err) {
     err.status = HTTPStatus.BAD_REQUEST;
     return next(err);

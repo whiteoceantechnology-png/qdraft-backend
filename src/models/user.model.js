@@ -37,7 +37,7 @@ class User extends Model {
    */
   toAuthJSON() {
     return {
-      access_token: `JWT ${this.createToken()}`,
+      access_token: `${this.createToken()}`,
       user_id: this.user_id,
       tenant_id: this.tenant_id,
       user_fname: this.user_fname,

@@ -4,10 +4,44 @@
  */
 
 import HTTPStatus from 'http-status';
+import Joi from 'joi';
 import { Op } from 'sequelize';
-import User from '../models/user.model.js';
-import Tenant from '../models/tenant.model.js';
-import { tenantFilter, tenantData, requireTenantAdmin } from '../middlewares/tenant.middleware.js';
+import { User, Tenant } from '../models/index.js';
+import { tenantFilter, tenantData } from '../middlewares/tenant.middleware.js';
+
+/**
+ * Validation schemas
+ */
+export const validation = {
+  create: {
+    body: Joi.object({
+      email: Joi.string().email().required(),
+      username: Joi.string().min(3).max(50).required(),
+      password: Joi.string().min(6).required(),
+      user_fname: Joi.string().allow('', null),
+      mobile_number: Joi.string().allow('', null),
+      school_name: Joi.string().allow('', null),
+      board: Joi.string().allow('', null),
+      class_name: Joi.string().allow('', null),
+      subject: Joi.string().allow('', null),
+      role: Joi.string().valid('super_admin', 'tenant_admin', 'teacher', 'user').default('user'),
+      tenant_id: Joi.number().allow(null),
+      tenant_code: Joi.string().allow('', null),
+    }),
+  },
+  update: {
+    body: Joi.object({
+      email: Joi.string().email(),
+      user_fname: Joi.string().allow('', null),
+      mobile_number: Joi.string().allow('', null),
+      school_name: Joi.string().allow('', null),
+      board: Joi.string().allow('', null),
+      class_name: Joi.string().allow('', null),
+      subject: Joi.string().allow('', null),
+      role: Joi.string().valid('super_admin', 'tenant_admin', 'teacher', 'user'),
+    }),
+  },
+};
 
 /**
  * GET /api/users
@@ -61,37 +95,103 @@ export async function getById(req, res, next) {
 /**
  * POST /api/users
  * Create a new user in tenant (tenant admin only)
+ * Tenant admin can create: user, teacher
+ * Super admin can create: any role including super_admin
  */
 export async function create(req, res, next) {
   try {
     const body = req.body;
+    const requestedRole = body.role || 'user';
 
-    // Check if email already exists in tenant
+    // Role-based validation
+    if (req.user.role === 'tenant_admin') {
+      // Tenant admin can only create user or teacher
+      if (!['user', 'teacher'].includes(requestedRole)) {
+        return res.status(HTTPStatus.FORBIDDEN).json({
+          success: false,
+          message: 'Tenant admin can only create users with role: user or teacher',
+          code: 'INVALID_ROLE_FOR_TENANT_ADMIN',
+        });
+      }
+    } else if (req.user.role === 'super_admin') {
+      // Super admin can create any role
+      if (!['super_admin', 'tenant_admin', 'teacher', 'user'].includes(requestedRole)) {
+        return res.status(HTTPStatus.BAD_REQUEST).json({
+          success: false,
+          message: 'Invalid role specified',
+          code: 'INVALID_ROLE',
+        });
+      }
+      
+      // For tenant_admin role, tenant_id is required
+      if (requestedRole === 'tenant_admin' && !body.tenant_id) {
+        return res.status(HTTPStatus.BAD_REQUEST).json({
+          success: false,
+          message: 'tenant_id is required when creating a tenant admin',
+          code: 'TENANT_ID_REQUIRED',
+        });
+      }
+    } else {
+      // Other roles cannot create users
+      return res.status(HTTPStatus.FORBIDDEN).json({
+        success: false,
+        message: 'Insufficient permissions to create users',
+        code: 'INSUFFICIENT_PERMISSIONS',
+      });
+    }
+
+    // Determine tenant_id: super_admin can specify it, otherwise use from JWT
+    let targetTenantId;
+    if (req.user.role === 'super_admin' && body.tenant_id) {
+      // Verify the tenant exists
+      const tenantExists = await Tenant.findByPk(body.tenant_id);
+      if (!tenantExists) {
+        return res.status(HTTPStatus.BAD_REQUEST).json({
+          success: false,
+          message: 'Specified tenant does not exist',
+          code: 'TENANT_NOT_FOUND',
+        });
+      }
+      targetTenantId = body.tenant_id;
+    } else {
+      targetTenantId = tenantData(req).tenant_id;
+      console.log('targetTenantId', targetTenantId);  
+    }
+
+    // Check if email already exists in target tenant
     const existingEmail = await User.findOne({
       where: {
-        ...tenantFilter(req),
+        tenant_id: targetTenantId,
         email: body.email,
       },
     });
 
     if (existingEmail) {
-      return res.status(HTTPStatus.CONFLICT).json({ message: 'Email already exists' });
+      return res.status(HTTPStatus.CONFLICT).json({
+        success: false,
+        message: 'Email already exists in this tenant',
+        code: 'DUPLICATE_EMAIL',
+      });
     }
 
-    // Check if username already exists in tenant
+    // Check if username already exists in target tenant
     const existingUsername = await User.findOne({
       where: {
-        ...tenantFilter(req),
+        tenant_id: targetTenantId,
         username: body.username,
       },
     });
 
     if (existingUsername) {
-      return res.status(HTTPStatus.CONFLICT).json({ message: 'Username already exists' });
+      return res.status(HTTPStatus.CONFLICT).json({
+        success: false,
+        message: 'Username already exists in this tenant',
+        code: 'DUPLICATE_USERNAME',
+      });
     }
 
     const user = await User.create({
-      ...tenantData(req),
+      tenant_id: targetTenantId,
       email: body.email,
       username: body.username,
       password: body.password,
@@ -105,7 +205,7 @@ export async function create(req, res, next) {
       subject: body.subject,
       subject_id: body.subject_id,
       medium: body.medium,
-      role: body.role || 'user',
+      role: requestedRole,
     });
 
     // Remove password from response
@@ -113,8 +213,9 @@ export async function create(req, res, next) {
     delete userResponse.password;
 
     return res.status(HTTPStatus.CREATED).json({
-      message: 'User created successfully',
-      user: userResponse,
+      success: true,
+      message: `${requestedRole.replace('_', ' ')} created successfully`,
+      data: userResponse,
     });
   } catch (err) {
     err.status = HTTPStatus.BAD_REQUEST;

@@ -4,11 +4,8 @@
  */
 
 import HTTPStatus from 'http-status';
-import { Op } from 'sequelize';
-import Blueprint from '../models/blueprint.model.js';
-import Chapter from '../models/chapter.model.js';
-import Question from '../models/question.model.js';
-import QuestionType from '../models/questiontype.model.js';
+import { Op, fn, col } from 'sequelize';
+import { Blueprint, Chapter, Question, QuestionType } from '../models/index.js';
 import { tenantFilter, tenantData } from '../middlewares/tenant.middleware.js';
 
 /**
@@ -74,8 +71,8 @@ export async function create(req, res, next) {
       ...tenantData(req),
       qbs_blp_name: body.qbs_blp_name,
       qbs_blp_added_by: req.user.user_id,
-      qbs_blp_dept_id: body.qbs_blp_dept_id,
-      qbs_sub_id: body.qbs_sub_id,
+      qbs_blp_dept_id: body.qbs_blp_dept_id || 0,
+      qbs_sub_id: body.qbs_sub_id || req.user.subject_id,
       qbs_creative: body.qbs_creative || 0,
       blueprint_marks: body.blueprint_marks || [],
     });
@@ -151,18 +148,18 @@ export async function deleteBlueprint(req, res, next) {
 
 /**
  * GET /api/blueprints/viewbystats
- * Get Question Type Counts by Chapters
+ * Get Question Type Counts by Chapters (optimized - single query)
  */
 export async function getQuestionTypeCountsByChapters(req, res, next) {
   try {
     const { qbs_sub_id } = req.query;
 
-    const where = { ...tenantFilter(req) };
-    if (qbs_sub_id) where.qbs_sub_id = qbs_sub_id;
+    const chapterWhere = { ...tenantFilter(req) };
+    if (qbs_sub_id) chapterWhere.qbs_sub_id = qbs_sub_id;
 
     // Get chapters
     const chapters = await Chapter.findAll({
-      where,
+      where: chapterWhere,
       attributes: ['qbs_chapter_id', 'qbs_chapter_name'],
     });
 
@@ -172,33 +169,39 @@ export async function getQuestionTypeCountsByChapters(req, res, next) {
       attributes: ['qbs_qs_type_id', 'qbs_qs_type_name'],
     });
 
-    // Build result with counts
-    const result = await Promise.all(
-      chapters.map(async (chapter) => {
-        const typeCounts = await Promise.all(
-          questionTypes.map(async (qt) => {
-            const count = await Question.count({
-              where: {
-                ...tenantFilter(req),
-                qbs_chapter_id: chapter.qbs_chapter_id,
-                qbs_qst_type_id: qt.qbs_qs_type_id,
-              },
-            });
-            return {
-              qbs_qs_type_id: qt.qbs_qs_type_id,
-              qbs_qs_type_name: qt.qbs_qs_type_name,
-              count,
-            };
-          })
-        );
+    // Get all counts in a single query with GROUP BY
+    const chapterIds = chapters.map(c => c.qbs_chapter_id);
+    const counts = await Question.findAll({
+      where: {
+        ...tenantFilter(req),
+        qbs_chapter_id: { [Op.in]: chapterIds },
+      },
+      attributes: [
+        'qbs_chapter_id',
+        'qbs_qst_type_id',
+        [fn('COUNT', col('qbs_question_id')), 'count'],
+      ],
+      group: ['qbs_chapter_id', 'qbs_qst_type_id'],
+      raw: true,
+    });
 
-        return {
-          qbs_chapter_id: chapter.qbs_chapter_id,
-          qbs_chapter_name: chapter.qbs_chapter_name,
-          questionTypes: typeCounts,
-        };
-      })
-    );
+    // Build lookup map for O(1) access
+    const countMap = {};
+    counts.forEach(c => {
+      const key = `${c.qbs_chapter_id}_${c.qbs_qst_type_id}`;
+      countMap[key] = parseInt(c.count);
+    });
+
+    // Build result
+    const result = chapters.map(chapter => ({
+      qbs_chapter_id: chapter.qbs_chapter_id,
+      qbs_chapter_name: chapter.qbs_chapter_name,
+      questionTypes: questionTypes.map(qt => ({
+        qbs_qs_type_id: qt.qbs_qs_type_id,
+        qbs_qs_type_name: qt.qbs_qs_type_name,
+        count: countMap[`${chapter.qbs_chapter_id}_${qt.qbs_qs_type_id}`] || 0,
+      })),
+    }));
 
     return res.status(HTTPStatus.OK).json(result);
   } catch (err) {

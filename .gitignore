@@ -5,6 +5,11 @@ dist/
 coverage
 doc/
 
+# SQLite database files
+data/
+*.sqlite
+*.sqlite3
+
 # PM2 logs
 logs/
 !logs/.gitkeep

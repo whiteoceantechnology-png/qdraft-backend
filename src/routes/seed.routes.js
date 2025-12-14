@@ -10,6 +10,9 @@ import { tenantContext } from '../middlewares/tenant.middleware.js';
 
 const routes = new Router();
 
+// Seed admin user (no auth required - for initial setup)
+routes.get('/admin', SeedController.createAdmin);
+
 // Clear all data (super admin only in dev/test)
 routes.get('/clear', SeedController.clearAll);
 

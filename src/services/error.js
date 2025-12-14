@@ -51,9 +51,31 @@ export class RequiredError {
    * @returns {Object} - errors - Pretty Object transform
    */
   static makePretty(errors) {
+    if (!Array.isArray(errors) || errors.length === 0) {
+      return {};
+    }
+
     return errors.reduce((obj, error) => {
       const nObj = obj;
-      nObj[error.field] = error.messages[0].replace(/"/g, '');
+      // Handle different error formats
+      if (error.field) {
+        // Format 1: error with messages array
+        if (error.messages && Array.isArray(error.messages) && error.messages.length > 0) {
+          nObj[error.field] = error.messages[0].replace(/"/g, '');
+        }
+        // Format 2: error with message string
+        else if (error.message) {
+          nObj[error.field] = error.message.replace(/"/g, '');
+        }
+        // Format 3: error with msg field
+        else if (error.msg) {
+          nObj[error.field] = error.msg.replace(/"/g, '');
+        }
+        // Default fallback
+        else {
+          nObj[error.field] = 'Unknown error';
+        }
+      }
       return nObj;
     }, {});
   }

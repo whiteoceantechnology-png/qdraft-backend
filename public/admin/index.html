@@ -1,0 +1,176 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>QB Server - Admin Dashboard</title>
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet">
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.1/font/bootstrap-icons.css" rel="stylesheet">
+  <link rel="stylesheet" href="css/admin.css">
+</head>
+<body>
+  <!-- Login Modal -->
+  <div class="modal fade" id="loginModal" tabindex="-1" data-bs-backdrop="static">
+    <div class="modal-dialog modal-dialog-centered">
+      <div class="modal-content">
+        <div class="modal-header bg-primary text-white">
+          <h5 class="modal-title"><i class="bi bi-shield-lock me-2"></i>Admin Login</h5>
+        </div>
+        <div class="modal-body">
+          <form id="loginForm">
+            <div class="mb-3">
+              <label class="form-label">Username</label>
+              <input type="text" class="form-control" id="loginUsername" required>
+            </div>
+            <div class="mb-3">
+              <label class="form-label">Password</label>
+              <input type="password" class="form-control" id="loginPassword" required>
+            </div>
+            <div id="loginError" class="alert alert-danger d-none"></div>
+            <button type="submit" class="btn btn-primary w-100">
+              <i class="bi bi-box-arrow-in-right me-2"></i>Login
+            </button>
+          </form>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Main Layout -->
+  <div id="appContainer" class="d-none">
+    <!-- Sidebar -->
+    <nav id="sidebar" class="sidebar">
+      <div class="sidebar-header">
+        <h4><i class="bi bi-database-gear me-2"></i>QB Admin</h4>
+      </div>
+      <ul class="nav flex-column">
+        <li class="nav-item">
+          <a class="nav-link active" href="#" data-page="dashboard">
+            <i class="bi bi-speedometer2"></i> Dashboard
+          </a>
+        </li>
+        <li class="nav-item">
+          <a class="nav-link" href="#" data-page="tenants">
+            <i class="bi bi-building"></i> Tenants
+          </a>
+        </li>
+        <li class="nav-item">
+          <a class="nav-link" href="#" data-page="users">
+            <i class="bi bi-people"></i> Users
+          </a>
+        </li>
+        <li class="nav-item">
+          <a class="nav-link" href="#" data-page="subjects">
+            <i class="bi bi-journal-bookmark"></i> Subjects
+          </a>
+        </li>
+        <li class="nav-item">
+          <a class="nav-link" href="#" data-page="chapters">
+            <i class="bi bi-book"></i> Chapters
+          </a>
+        </li>
+        <li class="nav-item">
+          <a class="nav-link" href="#" data-page="questionTypes">
+            <i class="bi bi-list-check"></i> Question Types
+          </a>
+        </li>
+        <li class="nav-item">
+          <a class="nav-link" href="#" data-page="settings">
+            <i class="bi bi-gear"></i> Settings
+          </a>
+        </li>
+      </ul>
+      <div class="sidebar-footer">
+        <button class="btn btn-outline-light btn-sm w-100" id="logoutBtn">
+          <i class="bi bi-box-arrow-left me-2"></i>Logout
+        </button>
+      </div>
+    </nav>
+
+    <!-- Main Content -->
+    <main id="mainContent" class="main-content">
+      <!-- Header -->
+      <header class="content-header">
+        <div class="d-flex justify-content-between align-items-center">
+          <div>
+            <button class="btn btn-link d-md-none" id="sidebarToggle">
+              <i class="bi bi-list fs-4"></i>
+            </button>
+            <h4 id="pageTitle" class="d-inline mb-0">Dashboard</h4>
+          </div>
+          <div class="d-flex align-items-center gap-3">
+            <span id="currentTenant" class="badge bg-info"></span>
+            <span id="currentUser" class="text-muted"></span>
+          </div>
+        </div>
+      </header>
+
+      <!-- Page Content -->
+      <div id="pageContent" class="page-content">
+        <!-- Dynamic content loaded here -->
+      </div>
+    </main>
+  </div>
+
+  <!-- Toast Container -->
+  <div class="toast-container position-fixed bottom-0 end-0 p-3">
+    <div id="toastNotification" class="toast" role="alert">
+      <div class="toast-header">
+        <i class="bi bi-bell me-2"></i>
+        <strong class="me-auto" id="toastTitle">Notification</strong>
+        <button type="button" class="btn-close" data-bs-dismiss="toast"></button>
+      </div>
+      <div class="toast-body" id="toastMessage"></div>
+    </div>
+  </div>
+
+  <!-- Delete Confirmation Modal -->
+  <div class="modal fade" id="deleteModal" tabindex="-1">
+    <div class="modal-dialog">
+      <div class="modal-content">
+        <div class="modal-header bg-danger text-white">
+          <h5 class="modal-title"><i class="bi bi-exclamation-triangle me-2"></i>Confirm Delete</h5>
+          <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+        </div>
+        <div class="modal-body">
+          <p id="deleteMessage">Are you sure you want to delete this item?</p>
+        </div>
+        <div class="modal-footer">
+          <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+          <button type="button" class="btn btn-danger" id="confirmDeleteBtn">Delete</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Entity Modal (Create/Edit) -->
+  <div class="modal fade" id="entityModal" tabindex="-1">
+    <div class="modal-dialog modal-lg">
+      <div class="modal-content">
+        <div class="modal-header bg-primary text-white">
+          <h5 class="modal-title" id="entityModalTitle">Create Entity</h5>
+          <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+        </div>
+        <div class="modal-body">
+          <form id="entityForm">
+            <div id="entityFormFields">
+              <!-- Dynamic fields loaded here -->
+            </div>
+          </form>
+        </div>
+        <div class="modal-footer">
+          <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+          <button type="button" class="btn btn-primary" id="saveEntityBtn">
+            <i class="bi bi-check-lg me-2"></i>Save
+          </button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/js/bootstrap.bundle.min.js"></script>
+  <script src="js/api.js"></script>
+  <script src="js/pages.js"></script>
+  <script src="js/admin.js"></script>
+</body>
+</html>

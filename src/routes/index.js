@@ -17,6 +17,8 @@ import QuestionTypeRoutes from './questionType.routes.js';
 import SeedRoutes from './seed.routes.js';
 import UserRoutes from './user.routes.js';
 import AuthRoutes from './auth.routes.js';
+import TenantRoutes from './tenant.routes.js';
+import SubjectRoutes from './subject.routes.js';
 
 import APIError from '../services/error.js';
 
@@ -32,8 +34,8 @@ const isTest = process.env.NODE_ENV === 'test';
 // Auth routes (public, no tenant context required for login/register)
 routes.use('/auth', AuthRoutes);
 
-// User routes (login/signup - public)
-routes.use('/users', UserRoutes);
+// Admin routes (tenant management)
+routes.use('/tenants', TenantRoutes);
 
 // Protected routes with tenant context
 routes.use('/blueprints', tenantContext, BluePrintRoutes);
@@ -44,6 +46,8 @@ routes.use('/patterns', tenantContext, PatternRoutes);
 routes.use('/posts', tenantContext, PostRoutes);
 routes.use('/questions', tenantContext, QuestionRoutes);
 routes.use('/questiontypes', tenantContext, QuestionTypeRoutes);
+routes.use('/subjects', tenantContext, SubjectRoutes);
+routes.use('/users', tenantContext, UserRoutes);
 
 if (isDev || isTest) {
   routes.use('/seeds', SeedRoutes);

@@ -5,6 +5,7 @@
 
 import { DataTypes, Model } from 'sequelize';
 import { sequelize } from '../config/database.js';
+import { tr } from '@faker-js/faker';
 
 class Question extends Model {}
 
@@ -49,7 +50,7 @@ Question.init(
     },
     qbs_dept_id: {
       type: DataTypes.INTEGER,
-      allowNull: false,
+      allowNull: true,
     },
     qbs_sub_id: {
       type: DataTypes.INTEGER,
