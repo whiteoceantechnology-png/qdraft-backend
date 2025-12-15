@@ -31,7 +31,7 @@ const localLogin = new LocalStrategy(
         include: [{
           model: Tenant,
           as: 'tenant',
-          attributes: ['tenant_id', 'tenant_name', 'is_active', 'subscription_plan', 'features'],
+          attributes: ['tenant_id', 'tenant_name', 'is_active', 'subscription_plan', 'subscription_start', 'subscription_end', 'features'],
         },
       ],
         attributes: ['user_id', 'tenant_id', 'username', 'password', 'is_active', 'role', 'user_fname', 'subject_id'
@@ -50,6 +50,23 @@ const localLogin = new LocalStrategy(
       // Check if tenant is active
       if (!user.tenant || !user.tenant.is_active) {
         return done(null, false, { message: 'Tenant account is inactive' });
+      }
+
+      // Check subscription dates for non-super_admin users
+      if (user.role !== 'super_admin' && user.tenant) {
+        const now = new Date();
+        const startDate = user.tenant.subscription_start ? new Date(user.tenant.subscription_start) : null;
+        const endDate = user.tenant.subscription_end ? new Date(user.tenant.subscription_end) : null;
+
+        // Check if subscription hasn't started yet
+        if (startDate && now < startDate) {
+          return done(null, false, { message: 'Tenant subscription has not started yet' });
+        }
+
+        // Check if subscription has expired
+        if (endDate && now > endDate) {
+          return done(null, false, { message: 'Tenant subscription has expired. Please contact administrator.' });
+        }
       }
 
       // Verify password
@@ -101,7 +118,7 @@ const jwtLogin = new JWTStrategy(jwtOpts, async (payload, done) => {
       include: [{
         model: Tenant,
         as: 'tenant',
-        attributes: ['tenant_id', 'tenant_name', 'is_active', 'subscription_plan', 'features'],
+        attributes: ['tenant_id', 'tenant_name', 'is_active', 'subscription_plan', 'subscription_start', 'subscription_end', 'features'],
       }],
     });
 
@@ -117,6 +134,23 @@ const jwtLogin = new JWTStrategy(jwtOpts, async (payload, done) => {
     // Check if tenant is active
     if (!user.tenant || !user.tenant.is_active) {
       return done(null, false, { message: 'Tenant account is inactive' });
+    }
+
+    // Check subscription dates for non-super_admin users
+    if (user.role !== 'super_admin' && user.tenant) {
+      const now = new Date();
+      const startDate = user.tenant.subscription_start ? new Date(user.tenant.subscription_start) : null;
+      const endDate = user.tenant.subscription_end ? new Date(user.tenant.subscription_end) : null;
+
+      // Check if subscription hasn't started yet
+      if (startDate && now < startDate) {
+        return done(null, false, { message: 'Tenant subscription has not started yet' });
+      }
+
+      // Check if subscription has expired
+      if (endDate && now > endDate) {
+        return done(null, false, { message: 'Tenant subscription has expired' });
+      }
     }
 
     // Attach tenant info to user object

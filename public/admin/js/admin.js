@@ -1090,9 +1090,9 @@ function applyRoleGates() {
         .map(r => r.trim())
         .filter(Boolean);
       if (allowedRoles.length > 0 && role && !allowedRoles.includes(role)) {
-        el.style.display = 'none';
+        el.style.setProperty('display', 'none', 'important');
       } else {
-        el.style.display = '';
+        el.style.removeProperty('display');
       }
     });
   } catch (e) {

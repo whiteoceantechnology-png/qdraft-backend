@@ -7,7 +7,7 @@ const Pages = {
   dashboard: () => `
     <div class="fade-in">
       <div class="stats-grid" id="statsGrid">
-        <div class="stat-card">
+        <div class="stat-card" data-roles="super_admin">
           <div class="d-flex justify-content-between align-items-start">
             <div>
               <div class="stat-value" id="statTenants">-</div>
@@ -28,7 +28,7 @@ const Pages = {
       </div>
 
       <div class="row">
-        <div class="col-lg-8">
+        <div class="col-lg-8" data-roles="super_admin">
           <div class="data-card mb-4">
             <div class="data-card-header">
               <h5><i class="bi bi-server me-2"></i>System Health</h5>
@@ -58,7 +58,7 @@ const Pages = {
                 <button class="btn btn-outline-success" data-roles="super_admin,tenant_admin" onclick="navigateTo('users'); openCreateModal('user')">
                   <i class="bi bi-person-plus me-2"></i>Add User
                 </button>
-                <button class="btn btn-outline-warning" data-roles="super_admin,tenant_admin" onclick="flushCacheAction()">
+                <button class="btn btn-outline-warning" data-roles="super_admin" onclick="flushCacheAction()">
                   <i class="bi bi-trash me-2"></i>Flush Cache
                 </button>
               </div>
@@ -95,6 +95,7 @@ const Pages = {
                   <th>Code</th>
                   <th>Email</th>
                   <th>Plan</th>
+                  <th>Subscription</th>
                   <th>Status</th>
                   <th>Users</th>
                   <th>Actions</th>
@@ -102,7 +103,7 @@ const Pages = {
               </thead>
               <tbody id="tenantsTableBody">
                 <tr>
-                  <td colspan="8" class="text-center py-4">
+                  <td colspan="9" class="text-center py-4">
                     <div class="spinner-border text-primary" role="status"></div>
                   </td>
                 </tr>
@@ -441,6 +442,16 @@ const FormFields = {
           </select>
         </div>
         <div class="col-md-4 mb-3">
+          <label class="form-label">Start Date</label>
+          <input type="date" class="form-control" name="subscription_start" value="${data.subscription_start ? data.subscription_start.split('T')[0] : ''}">
+        </div>
+        <div class="col-md-4 mb-3">
+          <label class="form-label">End Date</label>
+          <input type="date" class="form-control" name="subscription_end" value="${data.subscription_end ? data.subscription_end.split('T')[0] : ''}">
+        </div>
+      </div>
+      <div class="row">
+        <div class="col-md-4 mb-3">
           <label class="form-label">Max Users</label>
           <input type="number" class="form-control" name="max_users" value="${data.max_users || 5}">
         </div>
@@ -448,10 +459,12 @@ const FormFields = {
           <label class="form-label">Max Questions</label>
           <input type="number" class="form-control" name="max_questions" value="${data.max_questions || 1000}">
         </div>
-      </div>
-      <div class="form-check form-switch">
-        <input class="form-check-input" type="checkbox" name="is_active" id="tenantActive" ${data.is_active !== false ? 'checked' : ''}>
-        <label class="form-check-label" for="tenantActive">Active</label>
+        <div class="col-md-4 mb-3 d-flex align-items-end">
+          <div class="form-check form-switch">
+            <input class="form-check-input" type="checkbox" name="is_active" id="tenantActive" ${data.is_active !== false ? 'checked' : ''}>
+            <label class="form-check-label" for="tenantActive">Active</label>
+          </div>
+        </div>
       </div>
     </div>
   `,
@@ -632,7 +645,29 @@ const FormFields = {
 
 // Helper functions for rendering table rows
 const TableRows = {
-  tenant: (item) => `
+  tenant: (item) => {
+    const now = new Date();
+    const startDate = item.subscription_start ? new Date(item.subscription_start) : null;
+    const endDate = item.subscription_end ? new Date(item.subscription_end) : null;
+    const formatDate = (d) => d ? new Date(d).toLocaleDateString() : '-';
+    
+    let subStatus = 'Active';
+    let subBadge = 'bg-success';
+    if (startDate && now < startDate) {
+      subStatus = 'Not Started';
+      subBadge = 'bg-warning';
+    } else if (endDate && now > endDate) {
+      subStatus = 'Expired';
+      subBadge = 'bg-danger';
+    } else if (endDate) {
+      const daysLeft = Math.ceil((endDate - now) / (1000 * 60 * 60 * 24));
+      if (daysLeft <= 7) {
+        subStatus = `${daysLeft}d left`;
+        subBadge = 'bg-warning';
+      }
+    }
+    
+    return `
     <tr>
       <td>${item.tenant_id}</td>
       <td>
@@ -641,6 +676,10 @@ const TableRows = {
       <td><code>${item.tenant_code}</code></td>
       <td>${item.email || '-'}</td>
       <td><span class="badge badge-plan-${item.subscription_plan}">${item.subscription_plan}</span></td>
+      <td>
+        <small>${formatDate(item.subscription_start)} - ${formatDate(item.subscription_end)}</small><br>
+        <span class="badge ${subBadge}">${subStatus}</span>
+      </td>
       <td>
         ${item.is_active 
           ? '<span class="badge bg-success">Active</span>' 
@@ -656,7 +695,8 @@ const TableRows = {
         </button>
       </td>
     </tr>
-  `,
+  `;
+  },
 
   user: (item) => `
     <tr>

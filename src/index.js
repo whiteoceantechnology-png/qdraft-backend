@@ -56,7 +56,7 @@ app.get('/health', (req, res) => {
 });
 
 // Detailed health check (includes DB check)
-app.get('/health/detailed', async (req, res) => {
+app.get('/api/health/detailed', async (req, res) => {
   const health = {
     status: 'healthy',
     version: process.env.npm_package_version || '1.0.0',

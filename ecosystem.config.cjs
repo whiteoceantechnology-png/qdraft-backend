@@ -6,10 +6,39 @@
  *   pm2 start ecosystem.config.cjs --env development
  */
 
+// Load .env file for development
+const path = require('path');
+const fs = require('fs');
+
+function loadEnvFile(envPath) {
+  const envVars = {};
+  if (fs.existsSync(envPath)) {
+    const content = fs.readFileSync(envPath, 'utf8');
+    content.split('\n').forEach(line => {
+      const trimmed = line.trim();
+      if (trimmed && !trimmed.startsWith('#')) {
+        const [key, ...valueParts] = trimmed.split('=');
+        if (key) {
+          let value = valueParts.join('=');
+          // Remove surrounding quotes if present
+          if ((value.startsWith('"') && value.endsWith('"')) || 
+              (value.startsWith("'") && value.endsWith("'"))) {
+            value = value.slice(1, -1);
+          }
+          envVars[key.trim()] = value;
+        }
+      }
+    });
+  }
+  return envVars;
+}
+
+const envFile = loadEnvFile(path.join(__dirname, '.env'));
+
 module.exports = {
   apps: [
     {
-      name: 'qb-server',
+      name: 'draftq-prod',
       script: './src/index.js',
       
       // Instances and execution mode
@@ -36,10 +65,11 @@ module.exports = {
       wait_ready: true,
       listen_timeout: 10000,
       
-      // Environment variables for development
+      // Environment variables for development (loads from .env file)
       env: {
+        ...envFile,
         NODE_ENV: 'development',
-        PORT: 3000,
+        PORT: envFile.PORT || 3000,
       },
       
       // Environment variables for production
@@ -74,7 +104,7 @@ module.exports = {
       host: 'your-server.com',
       ref: 'origin/main',
       repo: 'git@github.com:your-username/qb-server.git',
-      path: '/var/www/qb-server',
+      path: '/var/www/draftq-prod',
       'pre-deploy-local': '',
       'post-deploy': 'npm install && pm2 reload ecosystem.config.cjs --env production',
       'pre-setup': '',

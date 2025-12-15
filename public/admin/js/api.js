@@ -73,6 +73,40 @@ class ApiService {
     }
   }
 
+  // Request to root-level endpoints (not prefixed with /api)
+  async rootRequest(endpoint, options = {}) {
+    const headers = {
+      'Content-Type': 'application/json',
+      ...options.headers,
+    };
+
+    if (this.token) {
+      headers['Authorization'] = `Bearer ${this.token}`;
+    }
+
+    try {
+      const response = await fetch(endpoint, {
+        ...options,
+        headers,
+      });
+
+      const data = await response.json();
+
+      if (!response.ok) {
+        if (response.status === 401) {
+          this.clearToken();
+          window.location.href = '/admin/#/login';
+        }
+        throw new Error(data.message || 'Request failed');
+      }
+
+      return data;
+    } catch (error) {
+      console.error('API Error:', error);
+      throw error;
+    }
+  }
+
   // Auth
   async login(username, password) {
     const response = await this.request('/auth/login', {
@@ -271,21 +305,21 @@ class ApiService {
     });
   }
 
-  // Health Check & Monitoring
+  // Health Check & Monitoring (root-level endpoints, not under /api)
   async getHealth() {
-    return this.request('/health/detailed');
+    return this.rootRequest('/health/detailed');
   }
 
   async getMetrics() {
-    return this.request('/metrics');
+    return this.rootRequest('/metrics');
   }
 
   async getCacheStats() {
-    return this.request('/cache/stats');
+    return this.rootRequest('/cache/stats');
   }
 
   async flushCache() {
-    return this.request('/cache/flush', {
+    return this.rootRequest('/cache/flush', {
       method: 'POST',
     });
   }
@@ -340,29 +374,29 @@ class ApiService {
   // Question Types
   async getQuestionTypes(params = {}) {
     const query = new URLSearchParams(params).toString();
-    return this.request(`/question-types${query ? '?' + query : ''}`);
+    return this.request(`/questiontypes${query ? '?' + query : ''}`);
   }
 
   async getQuestionType(id) {
-    return this.request(`/question-types/${id}`);
+    return this.request(`/questiontypes/${id}`);
   }
 
   async createQuestionType(data) {
-    return this.request('/question-types', {
+    return this.request('/questiontypes', {
       method: 'POST',
       body: JSON.stringify(data),
     });
   }
 
   async updateQuestionType(id, data) {
-    return this.request(`/question-types/${id}`, {
+    return this.request(`/questiontypes/${id}`, {
       method: 'PUT',
       body: JSON.stringify(data),
     });
   }
 
   async deleteQuestionType(id) {
-    return this.request(`/question-types/${id}`, {
+    return this.request(`/questiontypes/${id}`, {
       method: 'DELETE',
     });
   }

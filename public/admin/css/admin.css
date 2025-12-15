@@ -196,7 +196,8 @@ body {
 .badge-plan-enterprise { background: #28a745; }
 
 .badge-role-admin { background: #dc3545; }
-.badge-role-user { background: #007bff; }
+.badge-role-user { background: #245891; }
+.badge-role-teacher { background: #43eef1; }
 .badge-role-viewer { background: #6c757d; }
 
 /* Action Buttons */
